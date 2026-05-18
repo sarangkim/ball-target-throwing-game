@@ -130,18 +130,18 @@ function layout() {
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   const isMobile = w < 760;
-  const targetRadius = Math.min(w, h) * (isMobile ? 0.34 : 0.28);
+  const targetRadius = Math.min(w, h) * (isMobile ? 0.32 : 0.28);
   return {
     w,
     h,
     target: {
       x: w * (isMobile ? 0.46 : 0.43),
-      y: h * (isMobile ? 0.38 : 0.44),
+      y: h * (isMobile ? 0.36 : 0.44),
       r: targetRadius
     },
     ballHome: {
       x: w * (isMobile ? 0.68 : 0.73),
-      y: h * (isMobile ? 0.78 : 0.77)
+      y: h * (isMobile ? 0.74 : 0.77)
     }
   };
 }

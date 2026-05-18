@@ -318,26 +318,50 @@ input {
   .score-panel {
     top: auto;
     left: 10px;
-    right: auto;
-    bottom: 96px;
-    width: 168px;
-    padding: 9px;
+    right: 10px;
+    bottom: 78px;
+    width: auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr 0.82fr;
+    gap: 6px;
+    padding: 8px;
   }
 
   .round-banner,
   .score-row,
   .throw-info,
   .reward-row {
-    min-height: 34px;
-    margin-bottom: 6px;
+    min-height: 30px;
+    margin-bottom: 0;
     padding: 0 8px;
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .score-row strong,
   .throw-info strong,
   .reward-row strong {
-    font-size: 19px;
+    font-size: 17px;
+  }
+
+  .round-banner {
+    grid-column: 1 / 2;
+  }
+
+  #playerOneRow {
+    grid-column: 2 / 3;
+  }
+
+  #playerTwoRow {
+    grid-column: 3 / 4;
+  }
+
+  .reward-row,
+  .throw-info {
+    min-height: 28px;
+  }
+
+  .history {
+    display: none;
   }
 
   .round-banner strong,
@@ -346,9 +370,10 @@ input {
   }
 
   .mission {
-    min-height: 30px;
+    grid-column: 1 / 4;
+    min-height: 28px;
     padding: 7px 8px;
-    margin-bottom: 6px;
+    margin-bottom: 0;
   }
 
   .online-panel {
@@ -358,5 +383,6 @@ input {
   .message {
     bottom: 12px;
     font-size: 13px;
+    padding: 9px 12px;
   }
 }
