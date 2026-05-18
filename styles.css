@@ -169,6 +169,7 @@ input {
 
 .score-row,
 .throw-info {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -177,6 +178,21 @@ input {
   padding: 0 12px;
   margin-bottom: 8px;
   background: rgba(255, 255, 255, 0.68);
+}
+
+.score-row::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 9px;
+  bottom: 9px;
+  width: 6px;
+  border-radius: 999px;
+  background: var(--ball-color, #1245b9);
+}
+
+.score-row span {
+  padding-left: 11px;
 }
 
 .score-row.active {

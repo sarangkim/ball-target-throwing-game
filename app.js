@@ -36,10 +36,14 @@ const targetArtRings = [
 ];
 
 const colors = ["#df4655", "#f3df46", "#81c962", "#2f6dc8"];
+const playerBallStyles = [
+  { ballColor: "#1245b9", ballHighlight: "#7ba2ff" },
+  { ballColor: "#d93548", ballHighlight: "#ff9a8f" }
+];
 const state = {
   players: [
-    { name: "플레이어 1", score: 0, throws: [] },
-    { name: "플레이어 2", score: 0, throws: [] }
+    { name: "플레이어 1", score: 0, throws: [], ...playerBallStyles[0] },
+    { name: "플레이어 2", score: 0, throws: [], ...playerBallStyles[1] }
   ],
   currentPlayer: 0,
   throwsPerPlayer: 5,
@@ -204,6 +208,7 @@ function drawHand() {
 
 function drawBall() {
   const b = state.ball;
+  const player = state.players[state.currentPlayer];
   ctx.save();
   const shadowScale = Math.max(0.25, 1 - b.z * 0.003);
   ctx.fillStyle = "rgba(21,28,43,0.18)";
@@ -215,8 +220,8 @@ function drawBall() {
   ctx.rotate(b.spin);
   const grad = ctx.createRadialGradient(-b.radius * 0.35, -b.radius * 0.45, b.radius * 0.15, 0, 0, b.radius);
   grad.addColorStop(0, "#ffffff");
-  grad.addColorStop(0.18, "#7ba2ff");
-  grad.addColorStop(1, "#1245b9");
+  grad.addColorStop(0.18, player.ballHighlight || "#7ba2ff");
+  grad.addColorStop(1, player.ballColor || "#1245b9");
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
@@ -350,13 +355,7 @@ function finishThrow() {
   state.lastHit = { ...impact, score, radius: state.ball.radius, time: performance.now() };
   playHit(score);
 
-  if (score > 0) {
-    setMessage(`${player.name} ${score}점!`);
-  } else {
-    setMessage(`${player.name} 아깝습니다. 과녁 밖이에요.`);
-  }
-
-  advanceTurn();
+  advanceTurn(player, score);
   updateUi();
   syncRoom();
   setTimeout(() => {
@@ -376,25 +375,29 @@ function scoreAtPoint(point, target) {
   return ring.scores[index];
 }
 
-function advanceTurn() {
-  const player = state.players[state.currentPlayer];
-  if (player.throws.length >= state.throwsPerPlayer) {
-    if (state.currentPlayer === 0 && state.players[1].throws.length < state.throwsPerPlayer) {
-      state.currentPlayer = 1;
-      setMessage("플레이어 2 차례입니다.");
-    } else {
-      state.gameOver = true;
-      const [one, two] = state.players;
-      const result = one.score === two.score ? "무승부입니다." : `${one.score > two.score ? one.name : two.name} 승리!`;
-      setMessage(`경기 종료: ${result}`);
-      playFinale();
-    }
+function advanceTurn(lastPlayer, score) {
+  const scoreText = score > 0 ? `${lastPlayer.name} ${score}점!` : `${lastPlayer.name} 아깝습니다. 과녁 밖이에요.`;
+  const allDone = state.players.every((player) => player.throws.length >= state.throwsPerPlayer);
+  if (allDone) {
+    state.gameOver = true;
+    const [one, two] = state.players;
+    const result = one.score === two.score ? "무승부입니다." : `${one.score > two.score ? one.name : two.name} 승리!`;
+    setMessage(`${scoreText} 경기 종료: ${result}`);
+    playFinale();
+    return;
   }
+
+  const nextPlayer = state.currentPlayer === 0 ? 1 : 0;
+  state.currentPlayer = state.players[nextPlayer].throws.length < state.throwsPerPlayer ? nextPlayer : state.currentPlayer;
+  setMessage(`${scoreText} 다음은 ${state.players[state.currentPlayer].name} 차례입니다.`);
 }
 
 function updateUi() {
+  state.players = state.players.map((player, index) => ({ ...playerBallStyles[index], ...player }));
   ui.playerOneName.textContent = state.players[0].name;
   ui.playerTwoName.textContent = state.players[1].name;
+  ui.playerOneRow.style.setProperty("--ball-color", state.players[0].ballColor);
+  ui.playerTwoRow.style.setProperty("--ball-color", state.players[1].ballColor);
   ui.playerOneScore.textContent = state.players[0].score;
   ui.playerTwoScore.textContent = state.players[1].score;
   ui.playerOneRow.classList.toggle("active", state.currentPlayer === 0 && !state.gameOver);
