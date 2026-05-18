@@ -141,7 +141,7 @@ function layout() {
     },
     ballHome: {
       x: w * (isMobile ? 0.68 : 0.73),
-      y: h * (isMobile ? 0.74 : 0.77)
+      y: h * (isMobile ? 0.66 : 0.77)
     }
   };
 }
