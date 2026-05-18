@@ -290,8 +290,8 @@ input {
   .score-panel {
     top: auto;
     right: 10px;
-    bottom: 86px;
-    width: 176px;
+    bottom: 96px;
+    width: 168px;
     padding: 9px;
   }
 
@@ -299,7 +299,7 @@ input {
   .throw-info {
     min-height: 34px;
     margin-bottom: 6px;
-    padding: 0 9px;
+    padding: 0 8px;
     font-size: 12px;
   }
 

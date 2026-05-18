@@ -81,18 +81,19 @@ function resizeCanvas() {
 function layout() {
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
-  const targetRadius = Math.min(w, h) * (w < 760 ? 0.25 : 0.28);
+  const isMobile = w < 760;
+  const targetRadius = Math.min(w, h) * (isMobile ? 0.34 : 0.28);
   return {
     w,
     h,
     target: {
-      x: w * (w < 760 ? 0.46 : 0.43),
-      y: h * (w < 760 ? 0.33 : 0.44),
+      x: w * (isMobile ? 0.46 : 0.43),
+      y: h * (isMobile ? 0.38 : 0.44),
       r: targetRadius
     },
     ballHome: {
-      x: w * (w < 760 ? 0.52 : 0.73),
-      y: h * (w < 760 ? 0.77 : 0.77)
+      x: w * (isMobile ? 0.22 : 0.73),
+      y: h * (isMobile ? 0.78 : 0.77)
     }
   };
 }
