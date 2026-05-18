@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>공던지기 타겟 챌린지</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="game-stage" aria-label="공던지기 게임">
+        <canvas id="gameCanvas" width="960" height="620"></canvas>
+
+        <div class="top-bar">
+          <div class="brand">
+            <span class="brand-mark">◎</span>
+            <div>
+              <strong>공던지기 타겟 챌린지</strong>
+              <span id="roomStatus">로컬 플레이</span>
+            </div>
+          </div>
+
+          <div class="controls">
+            <button id="soundButton" type="button" title="음악 켜기/끄기">♪</button>
+            <button id="googleButton" type="button">Google 로그인</button>
+            <button id="resetButton" type="button">새 경기</button>
+          </div>
+        </div>
+
+        <aside class="score-panel" aria-label="점수판">
+          <div class="score-row active" id="playerOneRow">
+            <span id="playerOneName">플레이어 1</span>
+            <strong id="playerOneScore">0</strong>
+          </div>
+          <div class="score-row" id="playerTwoRow">
+            <span id="playerTwoName">플레이어 2</span>
+            <strong id="playerTwoScore">0</strong>
+          </div>
+          <div class="throw-info">
+            <span>남은 공</span>
+            <strong id="ballsLeft">5</strong>
+          </div>
+          <div class="history" id="throwHistory" aria-live="polite"></div>
+        </aside>
+
+        <section class="online-panel" aria-label="온라인 플레이">
+          <div class="online-actions">
+            <button id="createRoomButton" type="button">방 만들기</button>
+            <input id="roomCodeInput" type="text" placeholder="방 코드" maxlength="8" />
+            <button id="joinRoomButton" type="button">입장</button>
+          </div>
+          <p id="onlineHint">Google 로그인과 Firebase 설정 후 온라인 대전이 활성화됩니다.</p>
+        </section>
+
+        <div class="message" id="message" aria-live="polite">
+          공을 뒤로 당겼다가 과녁을 향해 놓아보세요.
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
