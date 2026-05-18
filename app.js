@@ -17,6 +17,13 @@ const ui = {
   playerTwoName: document.querySelector("#playerTwoName"),
   playerOneScore: document.querySelector("#playerOneScore"),
   playerTwoScore: document.querySelector("#playerTwoScore"),
+  roundLabel: document.querySelector("#roundLabel"),
+  matchLabel: document.querySelector("#matchLabel"),
+  playerOneRounds: document.querySelector("#playerOneRounds"),
+  playerTwoRounds: document.querySelector("#playerTwoRounds"),
+  starCount: document.querySelector("#starCount"),
+  ticketCount: document.querySelector("#ticketCount"),
+  missionLabel: document.querySelector("#missionLabel"),
   ballsLeft: document.querySelector("#ballsLeft"),
   throwHistory: document.querySelector("#throwHistory")
 };
@@ -40,13 +47,24 @@ const playerBallStyles = [
   { ballColor: "#1245b9", ballHighlight: "#7ba2ff" },
   { ballColor: "#d93548", ballHighlight: "#ff9a8f" }
 ];
+const missions = [
+  { text: "미션: 50점 이상 맞히기", test: (score) => score >= 50 },
+  { text: "미션: 80점 이상 대박 노리기", test: (score) => score >= 80 },
+  { text: "미션: 과녁 안에 꼭 붙이기", test: (score) => score > 0 },
+  { text: "미션: 100점 중앙 도전", test: (score) => score === 100 }
+];
 const state = {
   players: [
-    { name: "플레이어 1", score: 0, throws: [], ...playerBallStyles[0] },
-    { name: "플레이어 2", score: 0, throws: [], ...playerBallStyles[1] }
+    { name: "플레이어 1", score: 0, throws: [], roundWins: 0, stars: 0, tickets: 0, combo: 0, ...playerBallStyles[0] },
+    { name: "플레이어 2", score: 0, throws: [], roundWins: 0, stars: 0, tickets: 0, combo: 0, ...playerBallStyles[1] }
   ],
   currentPlayer: 0,
-  throwsPerPlayer: 5,
+  throwsPerPlayer: 3,
+  round: 1,
+  targetRoundWins: 2,
+  roundOver: false,
+  missionIndex: 0,
+  currentMission: missions[0],
   ball: null,
   dragging: false,
   dragStart: null,
@@ -101,6 +119,7 @@ function layout() {
 function resetBall() {
   const { ballHome } = layout();
   const player = state.players[state.currentPlayer];
+  const rainbow = shouldUseRainbowBall();
   state.ball = {
     x: ballHome.x,
     y: ballHome.y,
@@ -110,8 +129,9 @@ function resetBall() {
     vz: 0,
     radius: Math.max(18, Math.min(canvas.clientWidth, canvas.clientHeight) * 0.035),
     spin: 0,
-    color: player.ballColor,
-    highlight: player.ballHighlight
+    color: rainbow ? "#f3df46" : player.ballColor,
+    highlight: rainbow ? "#ffffff" : player.ballHighlight,
+    rainbow
   };
   state.dragging = false;
   state.dragStart = null;
@@ -221,11 +241,21 @@ function drawBall() {
 
   ctx.translate(b.x, b.y - b.z);
   ctx.rotate(b.spin);
-  const grad = ctx.createRadialGradient(-b.radius * 0.35, -b.radius * 0.45, b.radius * 0.15, 0, 0, b.radius);
-  grad.addColorStop(0, "#ffffff");
-  grad.addColorStop(0.18, b.highlight || "#7ba2ff");
-  grad.addColorStop(1, b.color || "#1245b9");
-  ctx.fillStyle = grad;
+  if (b.rainbow) {
+    const rainbowGrad = ctx.createConicGradient(b.spin, 0, 0);
+    rainbowGrad.addColorStop(0, "#e04852");
+    rainbowGrad.addColorStop(0.25, "#f4df42");
+    rainbowGrad.addColorStop(0.5, "#80ca62");
+    rainbowGrad.addColorStop(0.75, "#2f6ec8");
+    rainbowGrad.addColorStop(1, "#e04852");
+    ctx.fillStyle = rainbowGrad;
+  } else {
+    const grad = ctx.createRadialGradient(-b.radius * 0.35, -b.radius * 0.45, b.radius * 0.15, 0, 0, b.radius);
+    grad.addColorStop(0, "#ffffff");
+    grad.addColorStop(0.18, b.highlight || "#7ba2ff");
+    grad.addColorStop(1, b.color || "#1245b9");
+    ctx.fillStyle = grad;
+  }
   ctx.beginPath();
   ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
   ctx.fill();
@@ -310,7 +340,7 @@ function pointer(event) {
 }
 
 function onPointerDown(event) {
-  if (state.gameOver || state.flying) return;
+  if (state.gameOver || state.roundOver || state.flying) return;
   const p = pointer(event);
   const b = state.ball;
   const distance = Math.hypot(p.x - b.x, p.y - b.y);
@@ -351,18 +381,20 @@ function finishThrow() {
   state.flying = false;
   const { target } = layout();
   const impact = { x: state.ball.x, y: state.ball.y };
-  const score = scoreAtPoint(impact, target);
+  const baseScore = scoreAtPoint(impact, target);
+  const score = state.ball.rainbow ? Math.round(baseScore * 1.5) : baseScore;
   const player = state.players[state.currentPlayer];
   player.score += score;
   player.throws.push(score);
+  const rewards = awardThrowRewards(player, baseScore, score);
   state.lastHit = { ...impact, score, radius: state.ball.radius, time: performance.now() };
   playHit(score);
 
-  advanceTurn(player, score);
+  advanceTurn(player, score, rewards);
   updateUi();
   syncRoom();
   setTimeout(() => {
-    if (!state.gameOver) resetBall();
+    if (!state.gameOver && !state.roundOver) resetBall();
   }, 760);
 }
 
@@ -378,15 +410,35 @@ function scoreAtPoint(point, target) {
   return ring.scores[index];
 }
 
-function advanceTurn(lastPlayer, score) {
-  const scoreText = score > 0 ? `${lastPlayer.name} ${score}점!` : `${lastPlayer.name} 아깝습니다. 과녁 밖이에요.`;
+function awardThrowRewards(player, baseScore, finalScore) {
+  const rewards = [];
+  player.combo = baseScore > 0 ? player.combo + 1 : 0;
+
+  if (state.currentMission.test(baseScore)) {
+    player.stars += 1;
+    rewards.push("미션 별 +1");
+  }
+  if (player.combo >= 2) {
+    player.stars += 1;
+    rewards.push("콤보 별 +1");
+  }
+  if (baseScore >= 80) {
+    player.stars += 1;
+    rewards.push("대박 별 +1");
+  }
+  if (finalScore > baseScore) {
+    rewards.push("무지개 공 1.5배");
+  }
+
+  return rewards;
+}
+
+function advanceTurn(lastPlayer, score, rewards = []) {
+  const rewardText = rewards.length ? ` (${rewards.join(", ")})` : "";
+  const scoreText = score > 0 ? `${lastPlayer.name} ${score}점!${rewardText}` : `${lastPlayer.name} 아깝습니다. 과녁 밖이에요.`;
   const allDone = state.players.every((player) => player.throws.length >= state.throwsPerPlayer);
   if (allDone) {
-    state.gameOver = true;
-    const [one, two] = state.players;
-    const result = one.score === two.score ? "무승부입니다." : `${one.score > two.score ? one.name : two.name} 승리!`;
-    setMessage(`${scoreText} 경기 종료: ${result}`);
-    playFinale();
+    finishRound(scoreText);
     return;
   }
 
@@ -395,14 +447,77 @@ function advanceTurn(lastPlayer, score) {
   setMessage(`${scoreText} 다음은 ${state.players[state.currentPlayer].name} 차례입니다.`);
 }
 
+function finishRound(scoreText) {
+  state.roundOver = true;
+  const [one, two] = state.players;
+  if (one.score !== two.score) {
+    const winner = one.score > two.score ? one : two;
+    winner.roundWins += 1;
+    winner.tickets += 1;
+    winner.stars += 2;
+  } else {
+    one.stars += 1;
+    two.stars += 1;
+  }
+
+  const matchWinner = state.players.find((player) => player.roundWins >= state.targetRoundWins);
+  if (matchWinner) {
+    state.gameOver = true;
+    const result = `${matchWinner.name} 최종 승리!`;
+    setMessage(`${scoreText} ${state.round}라운드 종료. ${result}`);
+    playFinale();
+    return;
+  }
+
+  const roundResult = one.score === two.score ? "무승부" : `${one.score > two.score ? one.name : two.name} 라운드 승리`;
+  setMessage(`${scoreText} ${state.round}라운드 종료: ${roundResult}. 다음 라운드가 곧 시작됩니다.`);
+  playFinale();
+  setTimeout(startNextRound, 2100);
+}
+
+function startNextRound() {
+  state.round += 1;
+  state.roundOver = false;
+  state.currentPlayer = state.round % 2 === 1 ? 0 : 1;
+  state.players.forEach((player) => {
+    player.score = 0;
+    player.throws = [];
+    player.combo = 0;
+  });
+  state.missionIndex = pickMissionIndex();
+  state.currentMission = missions[state.missionIndex];
+  resetBall();
+  updateUi();
+  syncRoom(true);
+  setMessage(`${state.round}라운드 시작! ${state.players[state.currentPlayer].name} 먼저 던집니다.`);
+}
+
+function pickMissionIndex() {
+  return Math.floor(Math.random() * missions.length);
+}
+
+function shouldUseRainbowBall() {
+  const player = state.players[state.currentPlayer];
+  const opponent = state.players[state.currentPlayer === 0 ? 1 : 0];
+  const isLastThrow = player.throws.length === state.throwsPerPlayer - 1;
+  return isLastThrow && player.score + 40 < opponent.score;
+}
+
 function updateUi() {
   state.players = state.players.map((player, index) => ({ ...playerBallStyles[index], ...player }));
   ui.playerOneName.textContent = state.players[0].name;
   ui.playerTwoName.textContent = state.players[1].name;
+  ui.roundLabel.textContent = `${state.round}라운드`;
+  ui.matchLabel.textContent = `${state.targetRoundWins}승 먼저`;
   ui.playerOneRow.style.setProperty("--ball-color", state.players[0].ballColor);
   ui.playerTwoRow.style.setProperty("--ball-color", state.players[1].ballColor);
   ui.playerOneScore.textContent = state.players[0].score;
   ui.playerTwoScore.textContent = state.players[1].score;
+  ui.playerOneRounds.textContent = state.players[0].roundWins;
+  ui.playerTwoRounds.textContent = state.players[1].roundWins;
+  ui.starCount.textContent = state.players[0].stars + state.players[1].stars;
+  ui.ticketCount.textContent = state.players[0].tickets + state.players[1].tickets;
+  ui.missionLabel.textContent = state.currentMission.text;
   ui.playerOneRow.classList.toggle("active", state.currentPlayer === 0 && !state.gameOver);
   ui.playerTwoRow.classList.toggle("active", state.currentPlayer === 1 && !state.gameOver);
   ui.ballsLeft.textContent = Math.max(0, state.throwsPerPlayer - state.players[state.currentPlayer].throws.length);
@@ -423,15 +538,23 @@ function resetGame() {
   state.players.forEach((player, index) => {
     player.score = 0;
     player.throws = [];
+    player.roundWins = 0;
+    player.stars = 0;
+    player.tickets = 0;
+    player.combo = 0;
     if (!state.online.user) player.name = `플레이어 ${index + 1}`;
   });
   if (state.online.user) state.players[0].name = state.online.user.displayName || "Google 플레이어";
   state.currentPlayer = 0;
+  state.round = 1;
+  state.roundOver = false;
   state.gameOver = false;
+  state.missionIndex = 0;
+  state.currentMission = missions[state.missionIndex];
   resetBall();
   updateUi();
   syncRoom(true);
-  setMessage("공을 뒤로 당겼다가 과녁을 향해 놓아보세요.");
+  setMessage("3판 2승 시작! 공을 뒤로 당겼다가 과녁을 향해 놓아보세요.");
 }
 
 function ensureAudio() {
@@ -543,6 +666,9 @@ function roomPayload() {
   return {
     players: state.players,
     currentPlayer: state.currentPlayer,
+    round: state.round,
+    roundOver: state.roundOver,
+    missionIndex: state.missionIndex,
     gameOver: state.gameOver,
     updatedAt: Date.now()
   };
@@ -607,6 +733,10 @@ function listenRoom() {
     state.online.syncing = true;
     state.players = data.players || state.players;
     state.currentPlayer = data.currentPlayer || 0;
+    state.round = data.round || 1;
+    state.roundOver = Boolean(data.roundOver);
+    state.missionIndex = Number.isInteger(data.missionIndex) ? data.missionIndex : 0;
+    state.currentMission = missions[state.missionIndex] || missions[0];
     state.gameOver = Boolean(data.gameOver);
     updateUi();
     state.online.syncing = false;

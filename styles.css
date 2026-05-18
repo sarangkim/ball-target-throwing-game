@@ -167,8 +167,10 @@ input {
   padding: 12px;
 }
 
+.round-banner,
 .score-row,
-.throw-info {
+.throw-info,
+.reward-row {
   position: relative;
   display: flex;
   align-items: center;
@@ -178,6 +180,16 @@ input {
   padding: 0 12px;
   margin-bottom: 8px;
   background: rgba(255, 255, 255, 0.68);
+}
+
+.round-banner {
+  min-height: 38px;
+  color: #fff;
+  background: linear-gradient(90deg, #293142, #e04852);
+}
+
+.round-banner strong {
+  font-size: 13px;
 }
 
 .score-row::before {
@@ -200,8 +212,24 @@ input {
 }
 
 .score-row strong,
-.throw-info strong {
+.throw-info strong,
+.reward-row strong {
   font-size: 24px;
+}
+
+.reward-row strong {
+  font-size: 18px;
+}
+
+.mission {
+  min-height: 34px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  color: #293142;
+  font-size: 13px;
+  font-weight: 800;
+  background: rgba(244, 223, 66, 0.36);
 }
 
 .history {
@@ -295,8 +323,10 @@ input {
     padding: 9px;
   }
 
+  .round-banner,
   .score-row,
-  .throw-info {
+  .throw-info,
+  .reward-row {
     min-height: 34px;
     margin-bottom: 6px;
     padding: 0 8px;
@@ -304,8 +334,20 @@ input {
   }
 
   .score-row strong,
-  .throw-info strong {
+  .throw-info strong,
+  .reward-row strong {
     font-size: 19px;
+  }
+
+  .round-banner strong,
+  .mission {
+    font-size: 11px;
+  }
+
+  .mission {
+    min-height: 30px;
+    padding: 7px 8px;
+    margin-bottom: 6px;
   }
 
   .online-panel {

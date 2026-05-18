@@ -28,6 +28,10 @@
         </div>
 
         <aside class="score-panel" aria-label="점수판">
+          <div class="round-banner">
+            <span id="roundLabel">1라운드</span>
+            <strong id="matchLabel">3판 2승</strong>
+          </div>
           <div class="score-row active" id="playerOneRow">
             <span id="playerOneName">플레이어 1</span>
             <strong id="playerOneScore">0</strong>
@@ -36,10 +40,19 @@
             <span id="playerTwoName">플레이어 2</span>
             <strong id="playerTwoScore">0</strong>
           </div>
+          <div class="reward-row">
+            <span>라운드 승리</span>
+            <strong><span id="playerOneRounds">0</span> : <span id="playerTwoRounds">0</span></strong>
+          </div>
+          <div class="reward-row">
+            <span>별 / 티켓</span>
+            <strong><span id="starCount">0</span>★ / <span id="ticketCount">0</span></strong>
+          </div>
           <div class="throw-info">
             <span>남은 공</span>
-            <strong id="ballsLeft">5</strong>
+            <strong id="ballsLeft">3</strong>
           </div>
+          <div class="mission" id="missionLabel">오늘의 미션 준비 중</div>
           <div class="history" id="throwHistory" aria-live="polite"></div>
         </aside>
 
@@ -53,7 +66,7 @@
         </section>
 
         <div class="message" id="message" aria-live="polite">
-          공을 뒤로 당겼다가 과녁을 향해 놓아보세요.
+          3판 2승 시작! 공을 뒤로 당겼다가 과녁을 향해 놓아보세요.
         </div>
       </section>
     </main>
