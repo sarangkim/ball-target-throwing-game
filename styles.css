@@ -73,7 +73,7 @@ input {
   border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.22)),
-    repeating-linear-gradient(90deg, #d6b28b 0 6px, #f6eadc 6px 110px, #c99d72 110px 114px);
+    repeating-linear-gradient(90deg, var(--stage-wall-b, #d6b28b) 0 6px, var(--stage-wall-a, #f6eadc) 6px 110px, var(--stage-wall-c, #c99d72) 110px 114px);
   box-shadow: 0 18px 50px rgba(23, 32, 54, 0.25);
 }
 
@@ -185,7 +185,7 @@ input {
 .round-banner {
   min-height: 38px;
   color: #fff;
-  background: linear-gradient(90deg, #293142, #e04852);
+  background: linear-gradient(90deg, #293142, var(--stage-accent, #e04852));
 }
 
 .round-banner strong {
@@ -317,7 +317,8 @@ input {
 
   .score-panel {
     top: auto;
-    right: 10px;
+    left: 10px;
+    right: auto;
     bottom: 96px;
     width: 168px;
     padding: 9px;

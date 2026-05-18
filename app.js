@@ -2,6 +2,7 @@ const canvas = document.querySelector("#gameCanvas");
 const ctx = canvas.getContext("2d");
 
 const ui = {
+  stage: document.querySelector(".game-stage"),
   roomStatus: document.querySelector("#roomStatus"),
   soundButton: document.querySelector("#soundButton"),
   googleButton: document.querySelector("#googleButton"),
@@ -52,6 +53,35 @@ const missions = [
   { text: "미션: 80점 이상 대박 노리기", test: (score) => score >= 80 },
   { text: "미션: 과녁 안에 꼭 붙이기", test: (score) => score > 0 },
   { text: "미션: 100점 중앙 도전", test: (score) => score === 100 }
+];
+const stageThemes = [
+  {
+    name: "회전목마 광장",
+    wall: ["#fff7e9", "#f6d2b4", "#d99a75"],
+    floor: "#fff0cf",
+    rail: "#d6a25d",
+    accent: "#e04852",
+    melody: [523, 659, 784, 659, 587, 698, 880, 698],
+    tempo: 280
+  },
+  {
+    name: "야간 퍼레이드",
+    wall: ["#eaf2ff", "#a9c9ff", "#5b74c9"],
+    floor: "#dff5ff",
+    rail: "#5b74c9",
+    accent: "#f4df42",
+    melody: [392, 494, 587, 740, 659, 587, 494, 587],
+    tempo: 240
+  },
+  {
+    name: "캔디 부스",
+    wall: ["#fff3f8", "#ffc0d6", "#80ca62"],
+    floor: "#f8ffe1",
+    rail: "#e0488c",
+    accent: "#2f6ec8",
+    melody: [659, 784, 988, 880, 784, 659, 587, 659],
+    tempo: 260
+  }
 ];
 const state = {
   players: [
@@ -110,7 +140,7 @@ function layout() {
       r: targetRadius
     },
     ballHome: {
-      x: w * (isMobile ? 0.22 : 0.73),
+      x: w * (isMobile ? 0.68 : 0.73),
       y: h * (isMobile ? 0.78 : 0.77)
     }
   };
@@ -151,10 +181,23 @@ function draw() {
 }
 
 function drawRoom(w, h) {
+  const theme = currentTheme();
   ctx.save();
-  ctx.fillStyle = "rgba(255,255,255,0.26)";
+  const wall = ctx.createLinearGradient(0, 0, w, h * 0.72);
+  wall.addColorStop(0, theme.wall[0]);
+  wall.addColorStop(0.56, theme.wall[1]);
+  wall.addColorStop(1, theme.wall[2]);
+  ctx.fillStyle = wall;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalAlpha = 0.22;
+  ctx.fillStyle = "#ffffff";
+  for (let x = -20; x < w; x += 92) {
+    ctx.fillRect(x, 0, 42, h * 0.68);
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = theme.floor;
   ctx.fillRect(0, h * 0.68, w, h * 0.32);
-  ctx.strokeStyle = "rgba(36,42,58,0.12)";
+  ctx.strokeStyle = colorWithAlpha(theme.rail, 0.26);
   ctx.lineWidth = 2;
   for (let x = 0; x < w; x += 72) {
     ctx.beginPath();
@@ -162,6 +205,12 @@ function drawRoom(w, h) {
     ctx.lineTo(x + 24, h);
     ctx.stroke();
   }
+  ctx.strokeStyle = colorWithAlpha(theme.accent, 0.28);
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.68);
+  ctx.lineTo(w, h * 0.68);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -216,18 +265,69 @@ function drawTarget(target) {
 function drawHand() {
   if (state.flying) return;
   const b = state.ball;
+  const scale = b.radius / 28;
+  const wristGradient = ctx.createLinearGradient(0, -b.radius, b.radius * 3, b.radius);
   ctx.save();
-  ctx.translate(b.x + b.radius * 1.15, b.y + b.radius * 0.65);
-  ctx.rotate(-0.3);
-  ctx.fillStyle = "#f1b7a7";
-  roundedRect(-b.radius * 0.2, -b.radius * 0.18, b.radius * 2.35, b.radius * 0.66, b.radius * 0.25);
+  ctx.translate(b.x + b.radius * 1.18, b.y + b.radius * 0.42);
+  ctx.rotate(-0.22);
+
+  ctx.fillStyle = "rgba(21, 28, 43, 0.12)";
+  roundedRect(-6 * scale, 16 * scale, 92 * scale, 34 * scale, 15 * scale);
   ctx.fill();
-  ctx.fillStyle = "#f6c4b6";
-  for (let i = 0; i < 3; i += 1) {
-    roundedRect(b.radius * (0.2 + i * 0.48), -b.radius * 0.52, b.radius * 0.42, b.radius * 0.92, b.radius * 0.2);
-    ctx.fill();
-  }
+
+  wristGradient.addColorStop(0, "#f8cabd");
+  wristGradient.addColorStop(1, "#de927e");
+  ctx.fillStyle = wristGradient;
+  roundedRect(34 * scale, 4 * scale, 70 * scale, 38 * scale, 15 * scale);
+  ctx.fill();
+
+  ctx.fillStyle = "#f5b9a8";
+  roundedRect(-10 * scale, -16 * scale, 62 * scale, 56 * scale, 24 * scale);
+  ctx.fill();
+
+  ctx.fillStyle = "#f8c7b8";
+  drawFinger(-18, -48, 17, 58, -0.1, scale);
+  drawFinger(2, -56, 17, 66, -0.03, scale);
+  drawFinger(22, -51, 16, 61, 0.05, scale);
+  drawFinger(40, -39, 14, 50, 0.16, scale);
+
+  ctx.save();
+  ctx.translate(-18 * scale, 10 * scale);
+  ctx.rotate(0.68);
+  roundedRect(-7 * scale, -8 * scale, 20 * scale, 56 * scale, 10 * scale);
+  ctx.fill();
   ctx.restore();
+
+  ctx.strokeStyle = "rgba(124, 70, 58, 0.26)";
+  ctx.lineWidth = 1.5 * scale;
+  drawPalmLine(-1, -2, 30, 8, scale);
+  drawPalmLine(4, 13, 37, 22, scale);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.34)";
+  drawPalmLine(-2, -18, 34, -20, scale);
+
+  ctx.restore();
+}
+
+function drawFinger(x, y, width, height, rotation, scale) {
+  ctx.save();
+  ctx.translate(x * scale, y * scale);
+  ctx.rotate(rotation);
+  roundedRect(0, 0, width * scale, height * scale, (width / 2) * scale);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(124, 70, 58, 0.18)";
+  ctx.lineWidth = 1.2 * scale;
+  ctx.beginPath();
+  ctx.moveTo(3 * scale, height * 0.56 * scale);
+  ctx.lineTo((width - 3) * scale, height * 0.56 * scale);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPalmLine(x1, y1, x2, y2, scale) {
+  ctx.beginPath();
+  ctx.moveTo(x1 * scale, y1 * scale);
+  ctx.quadraticCurveTo(((x1 + x2) / 2) * scale, (y1 - 8) * scale, x2 * scale, y2 * scale);
+  ctx.stroke();
 }
 
 function drawBall() {
@@ -308,6 +408,19 @@ function drawHitPulse() {
 function roundedRect(x, y, width, height, radius) {
   ctx.beginPath();
   ctx.roundRect(x, y, width, height, radius);
+}
+
+function currentTheme() {
+  return stageThemes[(state.round - 1) % stageThemes.length];
+}
+
+function colorWithAlpha(hex, alpha) {
+  const clean = hex.replace("#", "");
+  const value = Number.parseInt(clean, 16);
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
 function update(time) {
@@ -486,6 +599,7 @@ function startNextRound() {
   });
   state.missionIndex = pickMissionIndex();
   state.currentMission = missions[state.missionIndex];
+  restartBgmForTheme();
   resetBall();
   updateUi();
   syncRoom(true);
@@ -505,6 +619,11 @@ function shouldUseRainbowBall() {
 
 function updateUi() {
   state.players = state.players.map((player, index) => ({ ...playerBallStyles[index], ...player }));
+  const theme = currentTheme();
+  ui.stage.style.setProperty("--stage-wall-a", theme.wall[0]);
+  ui.stage.style.setProperty("--stage-wall-b", theme.wall[1]);
+  ui.stage.style.setProperty("--stage-wall-c", theme.wall[2]);
+  ui.stage.style.setProperty("--stage-accent", theme.accent);
   ui.playerOneName.textContent = state.players[0].name;
   ui.playerTwoName.textContent = state.players[1].name;
   ui.roundLabel.textContent = `${state.round}라운드`;
@@ -551,6 +670,7 @@ function resetGame() {
   state.gameOver = false;
   state.missionIndex = 0;
   state.currentMission = missions[state.missionIndex];
+  restartBgmForTheme();
   resetBall();
   updateUi();
   syncRoom(true);
@@ -587,13 +707,15 @@ function tone(freq, duration, type = "sine", gain = 0.08, delay = 0) {
 
 function startBgm() {
   if (!audio || audio.bgmTimer) return;
-  const melody = [523, 659, 784, 659, 587, 698, 880, 698];
   audio.bgmTimer = setInterval(() => {
+    const theme = currentTheme();
+    const melody = theme.melody;
     const freq = melody[audio.step % melody.length];
     tone(freq, 0.22, "triangle", 0.035);
     tone(freq / 2, 0.28, "sine", 0.018);
+    if (audio.step % 4 === 0) tone(freq * 1.5, 0.1, "square", 0.014);
     audio.step += 1;
-  }, 280);
+  }, currentTheme().tempo);
 }
 
 function stopBgm() {
@@ -601,6 +723,12 @@ function stopBgm() {
     clearInterval(audio.bgmTimer);
     audio.bgmTimer = null;
   }
+}
+
+function restartBgmForTheme() {
+  if (!state.audioOn || !audio) return;
+  stopBgm();
+  startBgm();
 }
 
 function playThrow() {
