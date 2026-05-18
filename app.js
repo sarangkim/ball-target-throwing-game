@@ -99,6 +99,7 @@ function layout() {
 
 function resetBall() {
   const { ballHome } = layout();
+  const player = state.players[state.currentPlayer];
   state.ball = {
     x: ballHome.x,
     y: ballHome.y,
@@ -107,7 +108,9 @@ function resetBall() {
     vy: 0,
     vz: 0,
     radius: Math.max(18, Math.min(canvas.clientWidth, canvas.clientHeight) * 0.035),
-    spin: 0
+    spin: 0,
+    color: player.ballColor,
+    highlight: player.ballHighlight
   };
   state.dragging = false;
   state.dragStart = null;
@@ -208,7 +211,6 @@ function drawHand() {
 
 function drawBall() {
   const b = state.ball;
-  const player = state.players[state.currentPlayer];
   ctx.save();
   const shadowScale = Math.max(0.25, 1 - b.z * 0.003);
   ctx.fillStyle = "rgba(21,28,43,0.18)";
@@ -220,8 +222,8 @@ function drawBall() {
   ctx.rotate(b.spin);
   const grad = ctx.createRadialGradient(-b.radius * 0.35, -b.radius * 0.45, b.radius * 0.15, 0, 0, b.radius);
   grad.addColorStop(0, "#ffffff");
-  grad.addColorStop(0.18, player.ballHighlight || "#7ba2ff");
-  grad.addColorStop(1, player.ballColor || "#1245b9");
+  grad.addColorStop(0.18, b.highlight || "#7ba2ff");
+  grad.addColorStop(1, b.color || "#1245b9");
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
