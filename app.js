@@ -7,6 +7,7 @@ const ui = {
   soundButton: document.querySelector("#soundButton"),
   googleButton: document.querySelector("#googleButton"),
   resetButton: document.querySelector("#resetButton"),
+  difficultySelect: document.querySelector("#difficultySelect"),
   createRoomButton: document.querySelector("#createRoomButton"),
   joinRoomButton: document.querySelector("#joinRoomButton"),
   roomCodeInput: document.querySelector("#roomCodeInput"),
@@ -25,6 +26,7 @@ const ui = {
   starCount: document.querySelector("#starCount"),
   ticketCount: document.querySelector("#ticketCount"),
   missionLabel: document.querySelector("#missionLabel"),
+  itemButtons: [...document.querySelectorAll("[data-item]")],
   ballsLeft: document.querySelector("#ballsLeft"),
   throwHistory: document.querySelector("#throwHistory")
 };
@@ -48,6 +50,17 @@ const playerBallStyles = [
   { ballColor: "#1245b9", ballHighlight: "#7ba2ff" },
   { ballColor: "#d93548", ballHighlight: "#ff9a8f" }
 ];
+const defaultItems = { focus: 1, double: 1, big: 1 };
+const itemLabels = {
+  focus: "집중 공",
+  double: "두배 공",
+  big: "큰 공"
+};
+const difficultyProfiles = {
+  easy: { center: 0.14, inner: 0.46, mid: 0.86, spread: 1.22, label: "쉬움" },
+  normal: { center: 0.24, inner: 0.72, mid: 0.94, spread: 1, label: "보통" },
+  hard: { center: 0.36, inner: 0.84, mid: 0.98, spread: 0.72, label: "어려움" }
+};
 const missions = [
   { text: "미션: 50점 이상 맞히기", test: (score) => score >= 50 },
   { text: "미션: 80점 이상 대박 노리기", test: (score) => score >= 80 },
@@ -85,8 +98,8 @@ const stageThemes = [
 ];
 const state = {
   players: [
-    { name: "플레이어 1", score: 0, throws: [], roundWins: 0, stars: 0, tickets: 0, combo: 0, ...playerBallStyles[0] },
-    { name: "컴퓨터", score: 0, throws: [], roundWins: 0, stars: 0, tickets: 0, combo: 0, isComputer: true, ...playerBallStyles[1] }
+    { name: "플레이어 1", score: 0, throws: [], roundWins: 0, stars: 0, tickets: 0, combo: 0, items: { ...defaultItems }, selectedItem: "", ...playerBallStyles[0] },
+    { name: "컴퓨터", score: 0, throws: [], roundWins: 0, stars: 0, tickets: 0, combo: 0, items: { ...defaultItems }, selectedItem: "", isComputer: true, ...playerBallStyles[1] }
   ],
   currentPlayer: 0,
   throwsPerPlayer: 3,
@@ -97,6 +110,7 @@ const state = {
   currentMission: missions[0],
   vsComputer: true,
   computerThinking: false,
+  computerDifficulty: "normal",
   ball: null,
   dragging: false,
   dragStart: null,
@@ -153,6 +167,10 @@ function resetBall() {
   const { ballHome } = layout();
   const player = state.players[state.currentPlayer];
   const rainbow = shouldUseRainbowBall();
+  const item = player.selectedItem || "";
+  const itemColor = item === "double" ? "#f4df42" : item === "focus" ? "#20c7d6" : player.ballColor;
+  const itemHighlight = item ? "#ffffff" : player.ballHighlight;
+  const baseRadius = Math.max(18, Math.min(canvas.clientWidth, canvas.clientHeight) * 0.035);
   state.ball = {
     x: ballHome.x,
     y: ballHome.y,
@@ -160,11 +178,13 @@ function resetBall() {
     vx: 0,
     vy: 0,
     vz: 0,
-    radius: Math.max(18, Math.min(canvas.clientWidth, canvas.clientHeight) * 0.035),
+    radius: baseRadius * (item === "big" ? 1.24 : 1),
     spin: 0,
-    color: rainbow ? "#f3df46" : player.ballColor,
-    highlight: rainbow ? "#ffffff" : player.ballHighlight,
-    rainbow
+    color: rainbow ? "#f3df46" : itemColor,
+    highlight: rainbow ? "#ffffff" : itemHighlight,
+    rainbow,
+    item,
+    scoreBonusRadius: item === "big" ? 0.08 : 0
   };
   state.dragging = false;
   state.dragStart = null;
@@ -501,12 +521,15 @@ function finishThrow() {
   state.flying = false;
   const { target } = layout();
   const impact = { x: state.ball.x, y: state.ball.y };
-  const baseScore = scoreAtPoint(impact, target);
-  const score = state.ball.rainbow ? Math.round(baseScore * 1.5) : baseScore;
+  const scoringPoint = state.ball.item === "focus" ? focusPoint(impact, target) : impact;
+  const baseScore = scoreAtPoint(scoringPoint, target, state.ball.scoreBonusRadius || 0);
+  const itemScore = state.ball.item === "double" ? baseScore * 2 : baseScore;
+  const score = state.ball.rainbow ? Math.round(itemScore * 1.5) : itemScore;
   const player = state.players[state.currentPlayer];
   player.score += score;
   player.throws.push(score);
   const rewards = awardThrowRewards(player, baseScore, score);
+  consumeSelectedItem(player, state.ball.item);
   state.lastHit = { ...impact, score, radius: state.ball.radius, time: performance.now() };
   playHit(score);
 
@@ -521,10 +544,17 @@ function finishThrow() {
   }, 760);
 }
 
-function scoreAtPoint(point, target) {
+function focusPoint(point, target) {
+  return {
+    x: target.x + (point.x - target.x) * 0.72,
+    y: target.y + (point.y - target.y) * 0.72
+  };
+}
+
+function scoreAtPoint(point, target, bonusRadius = 0) {
   const dx = point.x - target.x;
   const dy = point.y - target.y;
-  const distanceRatio = Math.hypot(dx, dy) / target.r;
+  const distanceRatio = Math.max(0, Math.hypot(dx, dy) / target.r - bonusRadius);
   const ring = scoreRings.find((entry) => distanceRatio <= entry.limit);
   if (!ring) return 0;
   if (ring.scores.length === 1) return ring.scores[0];
@@ -549,11 +579,25 @@ function awardThrowRewards(player, baseScore, finalScore) {
     player.stars += 1;
     rewards.push("대박 별 +1");
   }
-  if (finalScore > baseScore) {
+  if (player.selectedItem && player.selectedItem !== "double") {
+    rewards.push(`${itemLabels[player.selectedItem]} 효과`);
+  }
+  if (finalScore > baseScore && player.selectedItem === "double") {
+    rewards.push(`${itemLabels[player.selectedItem]} 효과`);
+  } else if (finalScore > baseScore && !player.selectedItem) {
     rewards.push("무지개 공 1.5배");
   }
 
   return rewards;
+}
+
+function consumeSelectedItem(player, item) {
+  if (!item || !player.items?.[item]) {
+    player.selectedItem = "";
+    return;
+  }
+  player.items[item] -= 1;
+  player.selectedItem = "";
 }
 
 function advanceTurn(lastPlayer, score, rewards = []) {
@@ -653,22 +697,23 @@ function throwComputerBall() {
 function chooseComputerAim(target) {
   const roll = Math.random();
   const angle = Math.random() * Math.PI * 2;
+  const profile = difficultyProfiles[state.computerDifficulty] || difficultyProfiles.normal;
   const roundBoost = Math.min(0.08, (state.round - 1) * 0.025);
   let ringRatio = 0.2;
 
   if (state.currentMission.text.includes("100")) {
-    ringRatio = 0.05 + Math.random() * 0.08;
-  } else if (roll < 0.24 + roundBoost) {
+    ringRatio = (0.05 + Math.random() * 0.08) * profile.spread;
+  } else if (roll < profile.center + roundBoost) {
     ringRatio = Math.random() * 0.12;
-  } else if (roll < 0.72 + roundBoost) {
+  } else if (roll < profile.inner + roundBoost) {
     ringRatio = 0.14 + Math.random() * 0.18;
-  } else if (roll < 0.94) {
+  } else if (roll < profile.mid) {
     ringRatio = 0.32 + Math.random() * 0.22;
   } else {
     ringRatio = 0.55 + Math.random() * 0.18;
   }
 
-  const distance = target.r * ringRatio + target.r * 0.018 * (Math.random() - 0.5);
+  const distance = target.r * ringRatio * profile.spread + target.r * 0.018 * (Math.random() - 0.5);
   return {
     x: target.x + Math.cos(angle) * distance,
     y: target.y + Math.sin(angle) * distance
@@ -703,6 +748,8 @@ function resetScoresForCurrentMode() {
     player.stars = 0;
     player.tickets = 0;
     player.combo = 0;
+    player.items = { ...defaultItems };
+    player.selectedItem = "";
     player.isComputer = state.vsComputer && index === 1;
     if (state.vsComputer) {
       player.name = index === 1 ? "컴퓨터" : onlinePlayerName(`플레이어 ${index + 1}`);
@@ -722,7 +769,12 @@ function shouldUseRainbowBall() {
 }
 
 function updateUi() {
-  state.players = state.players.map((player, index) => ({ ...playerBallStyles[index], ...player }));
+  state.players = state.players.map((player, index) => ({
+    ...playerBallStyles[index],
+    items: { ...defaultItems, ...(player.items || {}) },
+    selectedItem: "",
+    ...player
+  }));
   const theme = currentTheme();
   ui.stage.style.setProperty("--stage-wall-a", theme.wall[0]);
   ui.stage.style.setProperty("--stage-wall-b", theme.wall[1]);
@@ -741,6 +793,7 @@ function updateUi() {
   ui.starCount.textContent = state.players[0].stars + state.players[1].stars;
   ui.ticketCount.textContent = state.players[0].tickets + state.players[1].tickets;
   ui.missionLabel.textContent = state.currentMission.text;
+  updateItemButtons();
   ui.playerOneRow.classList.toggle("active", state.currentPlayer === 0 && !state.gameOver);
   ui.playerTwoRow.classList.toggle("active", state.currentPlayer === 1 && !state.gameOver);
   ui.ballsLeft.textContent = Math.max(0, state.throwsPerPlayer - state.players[state.currentPlayer].throws.length);
@@ -751,6 +804,30 @@ function updateUi() {
     chip.style.background = score >= 80 ? "#df4655" : score >= 40 ? "#2f6dc8" : score > 0 ? "#6aa94e" : "#293142";
     ui.throwHistory.append(chip);
   });
+}
+
+function updateItemButtons() {
+  const player = state.players[state.currentPlayer];
+  const canUseItem = !state.gameOver && !state.roundOver && !state.flying && isLocalPlayerTurn() && !isComputerTurn();
+  ui.itemButtons.forEach((button) => {
+    const item = button.dataset.item;
+    const count = player.items?.[item] || 0;
+    button.querySelector("span").textContent = count;
+    button.classList.toggle("selected", player.selectedItem === item);
+    button.disabled = !canUseItem || count <= 0;
+  });
+}
+
+function selectItem(item) {
+  const player = state.players[state.currentPlayer];
+  if (!player || !isLocalPlayerTurn() || isComputerTurn() || state.flying || state.roundOver || state.gameOver) return;
+  if (!player.items?.[item]) {
+    setMessage(`${itemLabels[item]}이 남아 있지 않습니다.`);
+    return;
+  }
+  player.selectedItem = player.selectedItem === item ? "" : item;
+  updateUi();
+  setMessage(player.selectedItem ? `${itemLabels[item]} 선택! 다음 공에 적용됩니다.` : "아이템 선택을 취소했습니다.");
 }
 
 function setMessage(text) {
@@ -893,6 +970,7 @@ function roomPayload() {
     players: state.players,
     currentPlayer: state.currentPlayer,
     vsComputer: state.vsComputer,
+    computerDifficulty: state.computerDifficulty,
     round: state.round,
     roundOver: state.roundOver,
     missionIndex: state.missionIndex,
@@ -987,6 +1065,8 @@ function applyRoomData(data) {
   state.players = data.players || state.players;
   state.currentPlayer = data.currentPlayer || 0;
   state.vsComputer = Boolean(data.vsComputer);
+  state.computerDifficulty = data.computerDifficulty || state.computerDifficulty;
+  ui.difficultySelect.value = state.computerDifficulty;
   state.round = data.round || 1;
   state.roundOver = Boolean(data.roundOver);
   state.missionIndex = Number.isInteger(data.missionIndex) ? data.missionIndex : 0;
@@ -1004,6 +1084,14 @@ ui.resetButton.addEventListener("click", resetGame);
 ui.googleButton.addEventListener("click", signInWithGoogle);
 ui.createRoomButton.addEventListener("click", createRoom);
 ui.joinRoomButton.addEventListener("click", joinRoom);
+ui.difficultySelect.addEventListener("change", () => {
+  state.computerDifficulty = ui.difficultySelect.value;
+  setMessage(`컴퓨터 난이도: ${difficultyProfiles[state.computerDifficulty].label}`);
+  syncRoom(true);
+});
+ui.itemButtons.forEach((button) => {
+  button.addEventListener("click", () => selectItem(button.dataset.item));
+});
 ui.soundButton.addEventListener("click", () => {
   ensureAudio();
   state.audioOn = !state.audioOn;

@@ -22,6 +22,11 @@
 
           <div class="controls">
             <button id="soundButton" type="button" title="음악 켜기/끄기">♪</button>
+            <select id="difficultySelect" title="컴퓨터 난이도">
+              <option value="easy">쉬움</option>
+              <option value="normal" selected>보통</option>
+              <option value="hard">어려움</option>
+            </select>
             <button id="googleButton" type="button">Google 로그인</button>
             <button id="resetButton" type="button">새 경기</button>
           </div>
@@ -53,6 +58,11 @@
             <strong id="ballsLeft">3</strong>
           </div>
           <div class="mission" id="missionLabel">오늘의 미션 준비 중</div>
+          <div class="item-panel" aria-label="아이템 공">
+            <button type="button" data-item="focus">집중 <span>1</span></button>
+            <button type="button" data-item="double">두배 <span>1</span></button>
+            <button type="button" data-item="big">큰공 <span>1</span></button>
+          </div>
           <div class="history" id="throwHistory" aria-live="polite"></div>
         </aside>
 
