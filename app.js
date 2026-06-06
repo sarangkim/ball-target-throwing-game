@@ -86,7 +86,7 @@ const stageThemes = [
 const state = {
   players: [
     { name: "플레이어 1", score: 0, throws: [], roundWins: 0, stars: 0, tickets: 0, combo: 0, ...playerBallStyles[0] },
-    { name: "플레이어 2", score: 0, throws: [], roundWins: 0, stars: 0, tickets: 0, combo: 0, ...playerBallStyles[1] }
+    { name: "컴퓨터", score: 0, throws: [], roundWins: 0, stars: 0, tickets: 0, combo: 0, isComputer: true, ...playerBallStyles[1] }
   ],
   currentPlayer: 0,
   throwsPerPlayer: 3,
@@ -95,6 +95,8 @@ const state = {
   roundOver: false,
   missionIndex: 0,
   currentMission: missions[0],
+  vsComputer: true,
+  computerThinking: false,
   ball: null,
   dragging: false,
   dragStart: null,
@@ -453,7 +455,7 @@ function pointer(event) {
 }
 
 function onPointerDown(event) {
-  if (state.gameOver || state.roundOver || state.flying) return;
+  if (state.gameOver || state.roundOver || state.flying || isComputerTurn()) return;
   const p = pointer(event);
   const b = state.ball;
   const distance = Math.hypot(p.x - b.x, p.y - b.y);
@@ -507,7 +509,10 @@ function finishThrow() {
   updateUi();
   syncRoom();
   setTimeout(() => {
-    if (!state.gameOver && !state.roundOver) resetBall();
+    if (!state.gameOver && !state.roundOver) {
+      resetBall();
+      maybeStartComputerTurn();
+    }
   }, 760);
 }
 
@@ -558,6 +563,7 @@ function advanceTurn(lastPlayer, score, rewards = []) {
   const nextPlayer = state.currentPlayer === 0 ? 1 : 0;
   state.currentPlayer = state.players[nextPlayer].throws.length < state.throwsPerPlayer ? nextPlayer : state.currentPlayer;
   setMessage(`${scoreText} 다음은 ${state.players[state.currentPlayer].name} 차례입니다.`);
+  maybeStartComputerTurn();
 }
 
 function finishRound(scoreText) {
@@ -604,6 +610,49 @@ function startNextRound() {
   updateUi();
   syncRoom(true);
   setMessage(`${state.round}라운드 시작! ${state.players[state.currentPlayer].name} 먼저 던집니다.`);
+  maybeStartComputerTurn();
+}
+
+function isComputerTurn() {
+  return Boolean(state.vsComputer && state.players[state.currentPlayer]?.isComputer);
+}
+
+function maybeStartComputerTurn() {
+  if (!isComputerTurn() || state.computerThinking || state.gameOver || state.roundOver || state.flying) return;
+  state.computerThinking = true;
+  setMessage("컴퓨터가 조준 중입니다...");
+  setTimeout(() => {
+    state.computerThinking = false;
+    if (isComputerTurn() && !state.gameOver && !state.roundOver && !state.flying) {
+      throwComputerBall();
+    }
+  }, 900);
+}
+
+function throwComputerBall() {
+  const { target } = layout();
+  const aim = chooseComputerAim(target);
+  const b = state.ball;
+  const vz = 15 + Math.random() * 3;
+  const frames = (2 * vz) / 0.42;
+  b.vx = (aim.x - b.x) / frames;
+  b.vy = (aim.y - b.y) / frames;
+  b.vz = vz;
+  state.dragging = false;
+  state.flying = true;
+  playThrow();
+}
+
+function chooseComputerAim(target) {
+  const roundBoost = Math.min(0.12, (state.round - 1) * 0.04);
+  const accuracy = 0.42 - roundBoost;
+  const angle = Math.random() * Math.PI * 2;
+  const distance = target.r * Math.pow(Math.random(), 0.8) * accuracy;
+  const missionNudge = state.currentMission.text.includes("100") ? 0.45 : 1;
+  return {
+    x: target.x + Math.cos(angle) * distance * missionNudge,
+    y: target.y + Math.sin(angle) * distance * missionNudge
+  };
 }
 
 function pickMissionIndex() {
@@ -661,10 +710,12 @@ function resetGame() {
     player.stars = 0;
     player.tickets = 0;
     player.combo = 0;
-    if (!state.online.user) player.name = `플레이어 ${index + 1}`;
+    player.isComputer = index === 1;
+    if (!state.online.user || index === 1) player.name = index === 1 ? "컴퓨터" : `플레이어 ${index + 1}`;
   });
   if (state.online.user) state.players[0].name = state.online.user.displayName || "Google 플레이어";
   state.currentPlayer = 0;
+  state.computerThinking = false;
   state.round = 1;
   state.roundOver = false;
   state.gameOver = false;
@@ -674,6 +725,7 @@ function resetGame() {
   resetBall();
   updateUi();
   syncRoom(true);
+  ui.roomStatus.textContent = "컴퓨터 대전";
   setMessage("3판 2승 시작! 공을 뒤로 당겼다가 과녁을 향해 놓아보세요.");
 }
 
