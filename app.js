@@ -110,6 +110,7 @@ const state = {
     db: null,
     auth: null,
     user: null,
+    localPlayerIndex: null,
     roomCode: "",
     unsub: null,
     syncing: false
@@ -456,6 +457,10 @@ function pointer(event) {
 
 function onPointerDown(event) {
   if (state.gameOver || state.roundOver || state.flying || isComputerTurn()) return;
+  if (!isLocalPlayerTurn()) {
+    setMessage("상대가 던질 차례입니다.");
+    return;
+  }
   const p = pointer(event);
   const b = state.ball;
   const distance = Math.hypot(p.x - b.x, p.y - b.y);
@@ -635,8 +640,10 @@ function throwComputerBall() {
   const b = state.ball;
   const vz = 15 + Math.random() * 3;
   const frames = (2 * vz) / 0.42;
-  b.vx = (aim.x - b.x) / frames;
-  b.vy = (aim.y - b.y) / frames;
+  const damp = 0.992;
+  const effectiveFrames = (1 - damp ** frames) / (1 - damp);
+  b.vx = (aim.x - b.x) / effectiveFrames;
+  b.vy = (aim.y - b.y) / effectiveFrames;
   b.vz = vz;
   state.dragging = false;
   state.flying = true;
@@ -644,15 +651,63 @@ function throwComputerBall() {
 }
 
 function chooseComputerAim(target) {
-  const roundBoost = Math.min(0.12, (state.round - 1) * 0.04);
-  const accuracy = 0.42 - roundBoost;
+  const roll = Math.random();
   const angle = Math.random() * Math.PI * 2;
-  const distance = target.r * Math.pow(Math.random(), 0.8) * accuracy;
-  const missionNudge = state.currentMission.text.includes("100") ? 0.45 : 1;
+  const roundBoost = Math.min(0.08, (state.round - 1) * 0.025);
+  let ringRatio = 0.2;
+
+  if (state.currentMission.text.includes("100")) {
+    ringRatio = 0.05 + Math.random() * 0.08;
+  } else if (roll < 0.24 + roundBoost) {
+    ringRatio = Math.random() * 0.12;
+  } else if (roll < 0.72 + roundBoost) {
+    ringRatio = 0.14 + Math.random() * 0.18;
+  } else if (roll < 0.94) {
+    ringRatio = 0.32 + Math.random() * 0.22;
+  } else {
+    ringRatio = 0.55 + Math.random() * 0.18;
+  }
+
+  const distance = target.r * ringRatio + target.r * 0.018 * (Math.random() - 0.5);
   return {
-    x: target.x + Math.cos(angle) * distance * missionNudge,
-    y: target.y + Math.sin(angle) * distance * missionNudge
+    x: target.x + Math.cos(angle) * distance,
+    y: target.y + Math.sin(angle) * distance
   };
+}
+
+function isLocalPlayerTurn() {
+  if (!state.online.roomCode || state.online.localPlayerIndex === null) return true;
+  return state.currentPlayer === state.online.localPlayerIndex;
+}
+
+function onlinePlayerName(fallback) {
+  return state.online.user?.displayName || fallback;
+}
+
+function configureOnlinePlayers(localIndex) {
+  state.vsComputer = false;
+  state.online.localPlayerIndex = localIndex;
+  state.computerThinking = false;
+  state.players = state.players.map((player, index) => ({
+    ...player,
+    name: index === localIndex ? onlinePlayerName(`플레이어 ${index + 1}`) : player.name.replace("컴퓨터", "상대 대기"),
+    isComputer: false
+  }));
+}
+
+function resetScoresForCurrentMode() {
+  state.players.forEach((player, index) => {
+    player.score = 0;
+    player.throws = [];
+    player.roundWins = 0;
+    player.stars = 0;
+    player.tickets = 0;
+    player.combo = 0;
+    player.isComputer = state.vsComputer && index === 1;
+    if (state.vsComputer) {
+      player.name = index === 1 ? "컴퓨터" : onlinePlayerName(`플레이어 ${index + 1}`);
+    }
+  });
 }
 
 function pickMissionIndex() {
@@ -703,17 +758,7 @@ function setMessage(text) {
 }
 
 function resetGame() {
-  state.players.forEach((player, index) => {
-    player.score = 0;
-    player.throws = [];
-    player.roundWins = 0;
-    player.stars = 0;
-    player.tickets = 0;
-    player.combo = 0;
-    player.isComputer = index === 1;
-    if (!state.online.user || index === 1) player.name = index === 1 ? "컴퓨터" : `플레이어 ${index + 1}`;
-  });
-  if (state.online.user) state.players[0].name = state.online.user.displayName || "Google 플레이어";
+  resetScoresForCurrentMode();
   state.currentPlayer = 0;
   state.computerThinking = false;
   state.round = 1;
@@ -725,8 +770,9 @@ function resetGame() {
   resetBall();
   updateUi();
   syncRoom(true);
-  ui.roomStatus.textContent = "컴퓨터 대전";
+  ui.roomStatus.textContent = state.vsComputer ? "컴퓨터 대전" : `온라인 방 ${state.online.roomCode}`;
   setMessage("3판 2승 시작! 공을 뒤로 당겼다가 과녁을 향해 놓아보세요.");
+  maybeStartComputerTurn();
 }
 
 function ensureAudio() {
@@ -846,6 +892,7 @@ function roomPayload() {
   return {
     players: state.players,
     currentPlayer: state.currentPlayer,
+    vsComputer: state.vsComputer,
     round: state.round,
     roundOver: state.roundOver,
     missionIndex: state.missionIndex,
@@ -858,6 +905,9 @@ async function createRoom() {
   if (!canUseOnline()) return;
   const code = Math.random().toString(36).slice(2, 8).toUpperCase();
   state.online.roomCode = code;
+  configureOnlinePlayers(0);
+  state.players[1].name = "상대 대기";
+  resetGame();
   await saveRoom(true);
   listenRoom();
   ui.roomCodeInput.value = code;
@@ -873,9 +923,25 @@ async function joinRoom() {
     return;
   }
   state.online.roomCode = code;
+  const roomData = await fetchRoom(code);
+  if (!roomData) {
+    setMessage(`${code} 방을 찾을 수 없습니다.`);
+    return;
+  }
+  applyRoomData(roomData);
+  configureOnlinePlayers(1);
+  state.players[1].name = onlinePlayerName("플레이어 2");
+  await saveRoom(false);
   listenRoom();
   ui.roomStatus.textContent = `온라인 방 ${code}`;
   setMessage(`${code} 방에 입장했습니다.`);
+}
+
+async function fetchRoom(code) {
+  const { api, instance } = state.online.db;
+  const ref = api.doc(instance, "ball-target-rooms", code);
+  const snapshot = await api.getDoc(ref);
+  return snapshot.exists() ? snapshot.data() : null;
 }
 
 function canUseOnline() {
@@ -911,16 +977,22 @@ function listenRoom() {
     if (!snapshot.exists()) return;
     const data = snapshot.data();
     state.online.syncing = true;
-    state.players = data.players || state.players;
-    state.currentPlayer = data.currentPlayer || 0;
-    state.round = data.round || 1;
-    state.roundOver = Boolean(data.roundOver);
-    state.missionIndex = Number.isInteger(data.missionIndex) ? data.missionIndex : 0;
-    state.currentMission = missions[state.missionIndex] || missions[0];
-    state.gameOver = Boolean(data.gameOver);
+    applyRoomData(data);
     updateUi();
     state.online.syncing = false;
   });
+}
+
+function applyRoomData(data) {
+  state.players = data.players || state.players;
+  state.currentPlayer = data.currentPlayer || 0;
+  state.vsComputer = Boolean(data.vsComputer);
+  state.round = data.round || 1;
+  state.roundOver = Boolean(data.roundOver);
+  state.missionIndex = Number.isInteger(data.missionIndex) ? data.missionIndex : 0;
+  state.currentMission = missions[state.missionIndex] || missions[0];
+  state.gameOver = Boolean(data.gameOver);
+  ui.roomStatus.textContent = state.online.roomCode ? `온라인 방 ${state.online.roomCode}` : "컴퓨터 대전";
 }
 
 window.addEventListener("resize", resizeCanvas);
