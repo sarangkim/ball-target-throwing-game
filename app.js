@@ -188,13 +188,13 @@ function resetBall() {
     vx: 0,
     vy: 0,
     vz: 0,
-    radius: baseRadius * (item === "giant" ? 1.24 : 1),
+    radius: baseRadius * (item === "giant" ? 1.45 : 1),
     spin: 0,
     color: rainbow ? "#f3df46" : itemColor,
     highlight: rainbow ? "#ffffff" : itemHighlight,
     rainbow,
     item,
-    scoreBonusRadius: item === "giant" ? 0.08 : 0
+    scoreBonusRadius: item === "giant" ? 0.12 : 0
   };
   state.dragging = false;
   state.dragStart = null;
@@ -869,6 +869,7 @@ function selectItem(item) {
     return;
   }
   player.selectedItem = player.selectedItem === item ? "" : item;
+  resetBall();
   updateUi();
   setMessage(player.selectedItem ? `${itemLabels[item]} 선택! ${itemDescriptions[item]}` : "아이템 선택을 취소했습니다.");
   playItemSelect();
