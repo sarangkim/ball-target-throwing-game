@@ -245,15 +245,15 @@ select {
 
 .item-panel {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
   margin-bottom: 8px;
 }
 
 .item-panel button {
   min-height: 32px;
-  padding: 0 6px;
-  font-size: 12px;
+  padding: 0 4px;
+  font-size: 11px;
   font-weight: 800;
 }
 

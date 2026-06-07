@@ -50,11 +50,20 @@ const playerBallStyles = [
   { ballColor: "#1245b9", ballHighlight: "#7ba2ff" },
   { ballColor: "#d93548", ballHighlight: "#ff9a8f" }
 ];
-const defaultItems = { focus: 1, double: 1, big: 1 };
+const defaultItems = { magnet: 1, double: 1, giant: 1, safe: 1, firework: 1 };
 const itemLabels = {
-  focus: "집중 공",
+  magnet: "자석 공",
   double: "두배 공",
-  big: "큰 공"
+  giant: "왕공",
+  safe: "안전 공",
+  firework: "폭죽 공"
+};
+const itemDescriptions = {
+  magnet: "점수 판정 위치를 중심 쪽으로 당깁니다.",
+  double: "이번 공의 점수를 2배로 만듭니다.",
+  giant: "공이 커져 판정 범위가 넓어집니다.",
+  safe: "과녁 밖으로 나가도 10점을 받습니다.",
+  firework: "과녁에 맞히면 보너스 30점을 더합니다."
 };
 const difficultyProfiles = {
   easy: { center: 0.14, inner: 0.46, mid: 0.86, spread: 1.22, label: "쉬움" },
@@ -115,6 +124,7 @@ const state = {
   dragging: false,
   dragStart: null,
   dragNow: null,
+  releaseHand: null,
   flying: false,
   lastHit: null,
   gameOver: false,
@@ -168,7 +178,7 @@ function resetBall() {
   const player = state.players[state.currentPlayer];
   const rainbow = shouldUseRainbowBall();
   const item = player.selectedItem || "";
-  const itemColor = item === "double" ? "#f4df42" : item === "focus" ? "#20c7d6" : player.ballColor;
+  const itemColor = item === "double" ? "#f4df42" : item === "magnet" ? "#20c7d6" : item === "safe" ? "#80ca62" : item === "firework" ? "#e04852" : player.ballColor;
   const itemHighlight = item ? "#ffffff" : player.ballHighlight;
   const baseRadius = Math.max(18, Math.min(canvas.clientWidth, canvas.clientHeight) * 0.035);
   state.ball = {
@@ -178,17 +188,18 @@ function resetBall() {
     vx: 0,
     vy: 0,
     vz: 0,
-    radius: baseRadius * (item === "big" ? 1.24 : 1),
+    radius: baseRadius * (item === "giant" ? 1.24 : 1),
     spin: 0,
     color: rainbow ? "#f3df46" : itemColor,
     highlight: rainbow ? "#ffffff" : itemHighlight,
     rainbow,
     item,
-    scoreBonusRadius: item === "big" ? 0.08 : 0
+    scoreBonusRadius: item === "giant" ? 0.08 : 0
   };
   state.dragging = false;
   state.dragStart = null;
   state.dragNow = null;
+  state.releaseHand = null;
   state.flying = false;
 }
 
@@ -286,13 +297,39 @@ function drawTarget(target) {
 }
 
 function drawHand() {
-  if (state.flying) return;
+  if (state.flying) {
+    drawReleaseHand();
+    return;
+  }
   const b = state.ball;
+  drawHandAt(b.x, b.y, b.radius, -0.22, 1);
+}
+
+function drawReleaseHand() {
+  if (!state.releaseHand) return;
+  const age = performance.now() - state.releaseHand.time;
+  if (age > 420) {
+    state.releaseHand = null;
+    return;
+  }
+  const progress = age / 420;
+  drawHandAt(
+    state.releaseHand.x + progress * state.releaseHand.radius * 0.35,
+    state.releaseHand.y + progress * state.releaseHand.radius * 0.18,
+    state.releaseHand.radius,
+    -0.38 - progress * 0.35,
+    1 - progress * 0.5
+  );
+}
+
+function drawHandAt(x, y, radius, rotation, alpha) {
+  const b = { x, y, radius };
   const scale = b.radius / 28;
   const wristGradient = ctx.createLinearGradient(0, -b.radius, b.radius * 3, b.radius);
   ctx.save();
+  ctx.globalAlpha = alpha;
   ctx.translate(b.x + b.radius * 1.18, b.y + b.radius * 0.42);
-  ctx.rotate(-0.22);
+  ctx.rotate(rotation);
 
   ctx.fillStyle = "rgba(21, 28, 43, 0.12)";
   roundedRect(-6 * scale, 16 * scale, 92 * scale, 34 * scale, 15 * scale);
@@ -512,6 +549,7 @@ function onPointerUp() {
   state.ball.vx = dx * 0.18;
   state.ball.vy = dy * 0.18;
   state.ball.vz = power;
+  state.releaseHand = { x: state.ball.x, y: state.ball.y, radius: state.ball.radius, time: performance.now() };
   state.dragging = false;
   state.flying = true;
   playThrow();
@@ -521,9 +559,11 @@ function finishThrow() {
   state.flying = false;
   const { target } = layout();
   const impact = { x: state.ball.x, y: state.ball.y };
-  const scoringPoint = state.ball.item === "focus" ? focusPoint(impact, target) : impact;
-  const baseScore = scoreAtPoint(scoringPoint, target, state.ball.scoreBonusRadius || 0);
-  const itemScore = state.ball.item === "double" ? baseScore * 2 : baseScore;
+  const scoringPoint = state.ball.item === "magnet" ? magnetPoint(impact, target) : impact;
+  const rawScore = scoreAtPoint(scoringPoint, target, state.ball.scoreBonusRadius || 0);
+  const baseScore = state.ball.item === "safe" && rawScore === 0 ? 10 : rawScore;
+  const bonusScore = state.ball.item === "firework" && baseScore > 0 ? baseScore + 30 : baseScore;
+  const itemScore = state.ball.item === "double" ? bonusScore * 2 : bonusScore;
   const score = state.ball.rainbow ? Math.round(itemScore * 1.5) : itemScore;
   const player = state.players[state.currentPlayer];
   player.score += score;
@@ -532,6 +572,8 @@ function finishThrow() {
   consumeSelectedItem(player, state.ball.item);
   state.lastHit = { ...impact, score, radius: state.ball.radius, time: performance.now() };
   playHit(score);
+  if (state.ball.item) playItemEffect(state.ball.item);
+  if (rewards.length) playRewardSound(rewards.length);
 
   advanceTurn(player, score, rewards);
   updateUi();
@@ -544,7 +586,7 @@ function finishThrow() {
   }, 760);
 }
 
-function focusPoint(point, target) {
+function magnetPoint(point, target) {
   return {
     x: target.x + (point.x - target.x) * 0.72,
     y: target.y + (point.y - target.y) * 0.72
@@ -689,6 +731,7 @@ function throwComputerBall() {
   b.vx = (aim.x - b.x) / effectiveFrames;
   b.vy = (aim.y - b.y) / effectiveFrames;
   b.vz = vz;
+  state.releaseHand = { x: b.x, y: b.y, radius: b.radius, time: performance.now() };
   state.dragging = false;
   state.flying = true;
   playThrow();
@@ -827,7 +870,8 @@ function selectItem(item) {
   }
   player.selectedItem = player.selectedItem === item ? "" : item;
   updateUi();
-  setMessage(player.selectedItem ? `${itemLabels[item]} 선택! 다음 공에 적용됩니다.` : "아이템 선택을 취소했습니다.");
+  setMessage(player.selectedItem ? `${itemLabels[item]} 선택! ${itemDescriptions[item]}` : "아이템 선택을 취소했습니다.");
+  playItemSelect();
 }
 
 function setMessage(text) {
@@ -914,8 +958,10 @@ function playThrow() {
 
 function playHit(score) {
   ensureAudio();
-  if (score >= 80) {
-    [659, 784, 988, 1318].forEach((freq, i) => tone(freq, 0.16, "square", 0.055, i * 0.07));
+  if (score >= 120) {
+    [659, 784, 988, 1175, 1568].forEach((freq, i) => tone(freq, 0.15, "square", 0.06, i * 0.06));
+  } else if (score >= 80) {
+    [659, 784, 988, 1318].forEach((freq, i) => tone(freq, 0.16, "triangle", 0.055, i * 0.07));
   } else if (score >= 40) {
     [523, 659, 784].forEach((freq, i) => tone(freq, 0.14, "triangle", 0.045, i * 0.08));
   } else if (score > 0) {
@@ -924,6 +970,29 @@ function playHit(score) {
     tone(160, 0.18, "sawtooth", 0.035);
     tone(120, 0.22, "sine", 0.025, 0.12);
   }
+}
+
+function playItemSelect() {
+  ensureAudio();
+  [740, 988].forEach((freq, i) => tone(freq, 0.08, "triangle", 0.03, i * 0.05));
+}
+
+function playItemEffect(item) {
+  ensureAudio();
+  const patterns = {
+    magnet: [440, 660, 880],
+    double: [523, 1046, 1318],
+    giant: [220, 330, 440],
+    safe: [392, 523, 659],
+    firework: [784, 988, 1175, 1568]
+  };
+  (patterns[item] || [523, 659]).forEach((freq, i) => tone(freq, 0.12, i % 2 ? "square" : "triangle", 0.035, i * 0.055));
+}
+
+function playRewardSound(level) {
+  ensureAudio();
+  const base = level > 2 ? 988 : 784;
+  [base, base * 1.25, base * 1.5].forEach((freq, i) => tone(freq, 0.09, "sine", 0.025, 0.04 + i * 0.045));
 }
 
 function playFinale() {
