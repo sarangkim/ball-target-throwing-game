@@ -98,6 +98,7 @@ select {
 .top-bar,
 .score-panel,
 .online-panel,
+.lobby-panel,
 .message {
   position: absolute;
   z-index: 2;
@@ -118,6 +119,7 @@ select {
 .controls,
 .score-panel,
 .online-panel,
+.lobby-panel,
 .message {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -322,6 +324,152 @@ select {
   border: 1px solid rgba(23, 32, 54, 0.12);
 }
 
+.lobby-panel {
+  left: 16px;
+  top: 182px;
+  width: 286px;
+  max-height: 356px;
+  padding: 10px;
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.lobby-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.lobby-tabs button {
+  min-height: 30px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.lobby-tabs button.active {
+  color: #fff;
+  background: #293142;
+}
+
+.challenge-notice {
+  display: none;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  padding: 8px;
+  color: #fff;
+  background: linear-gradient(90deg, #293142, var(--red));
+}
+
+.challenge-notice.active {
+  display: block;
+}
+
+.challenge-notice div {
+  display: flex;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.challenge-notice button {
+  flex: 1;
+  min-height: 30px;
+}
+
+.lobby-content {
+  max-height: 278px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.lobby-content h2 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.lobby-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.lobby-user,
+.shop-card,
+.mission-card,
+.profile-grid {
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(23, 32, 54, 0.1);
+}
+
+.lobby-user,
+.shop-card,
+.mission-card {
+  margin-bottom: 7px;
+  padding: 8px;
+}
+
+.lobby-user,
+.shop-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lobby-user strong,
+.shop-card strong,
+.mission-card strong {
+  display: block;
+  font-size: 12px;
+}
+
+.lobby-user span,
+.shop-card small,
+.mission-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.lobby-user button,
+.shop-card button {
+  min-width: 56px;
+  min-height: 31px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mission-card.active {
+  outline: 2px solid rgba(244, 201, 67, 0.72);
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 12px;
+  padding: 10px;
+  font-size: 12px;
+}
+
+.profile-grid span {
+  color: var(--muted);
+}
+
+.help-list p {
+  margin: 0 0 8px;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  background: rgba(255, 255, 255, 0.72);
+}
+
 .message {
   left: 50%;
   bottom: 18px;
@@ -468,6 +616,46 @@ select {
   #onlineHint,
   .invite-link {
     display: none;
+  }
+
+  .lobby-panel {
+    top: auto;
+    left: 10px;
+    right: 10px;
+    bottom: 204px;
+    width: auto;
+    max-height: 146px;
+    padding: 8px;
+  }
+
+  .lobby-tabs {
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+
+  .lobby-tabs button {
+    min-height: 28px;
+    font-size: 10px;
+  }
+
+  .lobby-content {
+    max-height: 76px;
+  }
+
+  .lobby-content h2 {
+    display: none;
+  }
+
+  .lobby-user,
+  .shop-card,
+  .mission-card {
+    margin-bottom: 5px;
+    padding: 6px;
+  }
+
+  .challenge-notice {
+    padding: 6px;
+    font-size: 12px;
   }
 
   .message {

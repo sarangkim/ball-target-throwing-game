@@ -14,6 +14,9 @@ const ui = {
   roomCodeInput: document.querySelector("#roomCodeInput"),
   inviteLinkBox: document.querySelector("#inviteLinkBox"),
   onlineHint: document.querySelector("#onlineHint"),
+  lobbyContent: document.querySelector("#lobbyContent"),
+  challengeNotice: document.querySelector("#challengeNotice"),
+  lobbyTabs: [...document.querySelectorAll("[data-lobby-tab]")],
   message: document.querySelector("#message"),
   playerOneRow: document.querySelector("#playerOneRow"),
   playerTwoRow: document.querySelector("#playerTwoRow"),
@@ -67,6 +70,14 @@ const itemDescriptions = {
   safe: "과녁 밖으로 나가도 10점을 받습니다.",
   firework: "과녁에 맞히면 보너스 30점을 더합니다."
 };
+const shopItems = [
+  { item: "magnet", cost: 1, label: "자석 공", help: "살짝 빗나가도 중심 쪽으로 보정됩니다." },
+  { item: "double", cost: 2, label: "두배 공", help: "성공한 점수가 2배가 됩니다." },
+  { item: "giant", cost: 1, label: "왕공", help: "실제 공이 커져 판정이 쉬워집니다." },
+  { item: "safe", cost: 1, label: "안전 공", help: "실패해도 10점을 지켜줍니다." },
+  { item: "firework", cost: 2, label: "폭죽 공", help: "맞히면 30점 보너스가 붙습니다." }
+];
+
 const difficultyProfiles = {
   easy: { center: 0.14, inner: 0.46, mid: 0.86, spread: 1.22, label: "쉬움" },
   normal: { center: 0.24, inner: 0.72, mid: 0.94, spread: 1, label: "보통" },
@@ -140,6 +151,11 @@ const state = {
     pendingRoomCode: "",
     roomCode: "",
     unsub: null,
+    usersUnsub: null,
+    challengeUnsub: null,
+    onlineUsers: [],
+    incomingChallenge: null,
+    lobbyTab: "players",
     syncing: false
   }
 };
@@ -817,10 +833,10 @@ function shouldUseRainbowBall() {
 
 function updateUi() {
   state.players = state.players.map((player, index) => ({
-    ...playerBallStyles[index],
+    ...player,
     items: { ...defaultItems, ...(player.items || {}) },
-    selectedItem: "",
-    ...player
+    selectedItem: player.selectedItem || "",
+    ...playerBallStyles[index]
   }));
   const theme = currentTheme();
   ui.stage.style.setProperty("--stage-wall-a", theme.wall[0]);
@@ -842,6 +858,7 @@ function updateUi() {
   ui.missionLabel.textContent = state.currentMission.text;
   updateItemButtons();
   updateOnlineUi();
+  renderLobby();
   ui.playerOneRow.classList.toggle("active", state.currentPlayer === 0 && !state.gameOver);
   ui.playerTwoRow.classList.toggle("active", state.currentPlayer === 1 && !state.gameOver);
   ui.ballsLeft.textContent = Math.max(0, state.throwsPerPlayer - state.players[state.currentPlayer].throws.length);
@@ -864,6 +881,136 @@ function updateItemButtons() {
     button.classList.toggle("selected", player.selectedItem === item);
     button.disabled = !canUseItem || count <= 0;
   });
+}
+
+function localRewardPlayer() {
+  return state.players[state.online.localPlayerIndex ?? 0] || state.players[0];
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function renderLobby() {
+  if (!ui.lobbyContent) return;
+  ui.lobbyTabs.forEach((button) => {
+    button.classList.toggle("active", button.dataset.lobbyTab === state.online.lobbyTab);
+  });
+
+  renderChallengeNotice();
+
+  const player = localRewardPlayer();
+  const tab = state.online.lobbyTab;
+  if (tab === "players") {
+    const users = state.online.onlineUsers.filter((user) => user.uid !== state.online.user?.uid);
+    const userCards = users.length
+      ? users.map((user) => `
+        <div class="lobby-user">
+          <div>
+            <strong>${escapeHtml(user.name || "이름 없는 플레이어")}</strong>
+            <span>${user.inRoom ? "게임 중" : "도전 가능"}</span>
+          </div>
+          <button type="button" data-challenge-uid="${escapeHtml(user.uid)}">도전</button>
+        </div>
+      `).join("")
+      : `<p class="lobby-empty">${state.online.user ? "아직 접속한 상대가 없습니다. 다른 기기에서 로그인하면 여기에 나타납니다." : "Google 로그인 후 접속한 사람에게 도전할 수 있습니다."}</p>`;
+    ui.lobbyContent.innerHTML = `<h2>로그인 유저</h2>${userCards}`;
+    return;
+  }
+
+  if (tab === "profile") {
+    ui.lobbyContent.innerHTML = `
+      <h2>내정보</h2>
+      <div class="profile-grid">
+        <span>이름</span><strong>${escapeHtml(state.online.user?.displayName || player.name)}</strong>
+        <span>별</span><strong>${player.stars || 0}</strong>
+        <span>티켓</span><strong>${player.tickets || 0}</strong>
+        <span>라운드 승리</span><strong>${player.roundWins || 0}</strong>
+      </div>
+    `;
+    return;
+  }
+
+  if (tab === "missions") {
+    ui.lobbyContent.innerHTML = `
+      <h2>미션</h2>
+      ${missions.map((mission, index) => `
+        <div class="mission-card ${index === state.missionIndex ? "active" : ""}">
+          <strong>${index === state.missionIndex ? "진행 중" : `미션 ${index + 1}`}</strong>
+          <span>${escapeHtml(mission.text.replace("미션: ", ""))}</span>
+        </div>
+      `).join("")}
+    `;
+    return;
+  }
+
+  if (tab === "shop") {
+    ui.lobbyContent.innerHTML = `
+      <h2>상점</h2>
+      <p class="lobby-empty">티켓 ${player.tickets || 0}장으로 아이템을 충전합니다.</p>
+      ${shopItems.map((entry) => `
+        <div class="shop-card">
+          <div>
+            <strong>${escapeHtml(entry.label)} <span>${player.items?.[entry.item] || 0}개</span></strong>
+            <small>${escapeHtml(entry.help)}</small>
+          </div>
+          <button type="button" data-buy-item="${entry.item}">${entry.cost}티켓</button>
+        </div>
+      `).join("")}
+    `;
+    return;
+  }
+
+  ui.lobbyContent.innerHTML = `
+    <h2>도움말</h2>
+    <div class="help-list">
+      <p><strong>도전:</strong> 로그인 유저 목록에서 상대를 골라 바로 방을 만들고 도전장을 보냅니다.</p>
+      <p><strong>던지기:</strong> 공을 뒤로 당긴 뒤 과녁 방향으로 놓으면 날아갑니다.</p>
+      <p><strong>자석 공:</strong> 실제 도착점이 중심 쪽으로 조금 보정됩니다.</p>
+      <p><strong>왕공:</strong> 공이 실제로 커지고 판정 범위도 넓어집니다.</p>
+      <p><strong>상점:</strong> 라운드 승리로 받은 티켓을 아이템으로 바꿉니다.</p>
+    </div>
+  `;
+}
+
+function renderChallengeNotice() {
+  if (!ui.challengeNotice) return;
+  const challenge = state.online.incomingChallenge;
+  if (!challenge || challenge.status !== "pending") {
+    ui.challengeNotice.innerHTML = "";
+    ui.challengeNotice.classList.remove("active");
+    return;
+  }
+  ui.challengeNotice.classList.add("active");
+  ui.challengeNotice.innerHTML = `
+    <strong>${escapeHtml(challenge.fromName || "상대")}님의 도전!</strong>
+    <div>
+      <button type="button" data-accept-challenge>수락</button>
+      <button type="button" data-decline-challenge>거절</button>
+    </div>
+  `;
+}
+
+function buyItem(item) {
+  const entry = shopItems.find((shopItem) => shopItem.item === item);
+  const player = localRewardPlayer();
+  if (!entry || !player) return;
+  if ((player.tickets || 0) < entry.cost) {
+    setMessage("티켓이 부족합니다. 라운드에서 이기면 티켓을 받을 수 있어요.");
+    return;
+  }
+  player.tickets -= entry.cost;
+  player.items = { ...defaultItems, ...(player.items || {}) };
+  player.items[item] += 1;
+  updateUi();
+  syncRoom(true);
+  setMessage(`${entry.label}을 구입했습니다.`);
+  playRewardSound(1);
 }
 
 function selectItem(item) {
@@ -1037,6 +1184,7 @@ async function signInWithGoogle() {
   state.online.user = result.user;
   state.players[0].name = result.user.displayName || "Google 플레이어";
   ui.googleButton.textContent = state.players[0].name;
+  await registerLobbyPresence();
   updateOnlineUi();
   if (state.online.pendingRoomCode && !state.online.roomCode) {
     ui.roomCodeInput.value = state.online.pendingRoomCode;
@@ -1045,6 +1193,52 @@ async function signInWithGoogle() {
     setMessage("Google 로그인 완료. 온라인 방을 만들 수 있어요.");
   }
   updateUi();
+}
+
+async function registerLobbyPresence() {
+  if (!state.online.db || !state.online.user) return;
+  const { api, instance } = state.online.db;
+  const user = state.online.user;
+  const userRef = api.doc(instance, "ball-target-users", user.uid);
+  await api.setDoc(userRef, {
+    uid: user.uid,
+    name: user.displayName || "Google 플레이어",
+    photoURL: user.photoURL || "",
+    inRoom: Boolean(state.online.roomCode),
+    roomCode: state.online.roomCode || "",
+    lastSeen: Date.now()
+  }, { merge: true });
+
+  if (state.online.usersUnsub) state.online.usersUnsub();
+  state.online.usersUnsub = api.onSnapshot(api.collection(instance, "ball-target-users"), (snapshot) => {
+    const now = Date.now();
+    state.online.onlineUsers = snapshot.docs
+      .map((docSnap) => docSnap.data())
+      .filter((entry) => entry.uid && now - (entry.lastSeen || 0) < 15 * 60 * 1000)
+      .sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+    renderLobby();
+  });
+
+  if (state.online.challengeUnsub) state.online.challengeUnsub();
+  const challengeRef = api.doc(instance, "ball-target-challenges", user.uid);
+  state.online.challengeUnsub = api.onSnapshot(challengeRef, (snapshot) => {
+    state.online.incomingChallenge = snapshot.exists() ? snapshot.data() : null;
+    renderLobby();
+    if (state.online.incomingChallenge?.status === "pending") {
+      setMessage(`${state.online.incomingChallenge.fromName || "상대"}님이 도전했습니다. 로비에서 수락하세요.`);
+      playRewardSound(1);
+    }
+  });
+}
+
+async function updateLobbyPresence() {
+  if (!state.online.db || !state.online.user) return;
+  const { api, instance } = state.online.db;
+  await api.setDoc(api.doc(instance, "ball-target-users", state.online.user.uid), {
+    inRoom: Boolean(state.online.roomCode),
+    roomCode: state.online.roomCode || "",
+    lastSeen: Date.now()
+  }, { merge: true });
 }
 
 function hydrateRoomFromUrl() {
@@ -1115,6 +1309,7 @@ async function createRoom() {
   ui.roomCodeInput.value = code;
   ui.roomStatus.textContent = `온라인 방 ${code}`;
   setRoomUrl(code);
+  updateLobbyPresence();
   updateOnlineUi();
   setMessage(`방 ${code} 생성 완료. 초대 링크를 상대에게 보내세요.`);
 }
@@ -1140,8 +1335,65 @@ async function joinRoom() {
   listenRoom();
   ui.roomStatus.textContent = `온라인 방 ${code}`;
   setRoomUrl(code);
+  updateLobbyPresence();
   updateOnlineUi();
   setMessage(`${code} 방에 입장했습니다.`);
+}
+
+async function challengeUser(uid) {
+  if (!canUseOnline()) return;
+  if (uid === state.online.user.uid) return;
+  const opponent = state.online.onlineUsers.find((user) => user.uid === uid);
+  const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+  state.online.roomCode = code;
+  state.online.pendingRoomCode = "";
+  configureOnlinePlayers(0);
+  state.players[1].name = opponent?.name || "상대 대기";
+  resetGame();
+  await saveRoom(true);
+  listenRoom();
+  ui.roomCodeInput.value = code;
+  ui.roomStatus.textContent = `온라인 방 ${code}`;
+  setRoomUrl(code);
+  await updateLobbyPresence();
+
+  const { api, instance } = state.online.db;
+  await api.setDoc(api.doc(instance, "ball-target-challenges", uid), {
+    status: "pending",
+    roomCode: code,
+    fromUid: state.online.user.uid,
+    fromName: onlinePlayerName("플레이어 1"),
+    toUid: uid,
+    createdAt: Date.now()
+  }, { merge: true });
+  setMessage(`${opponent?.name || "상대"}님에게 도전을 보냈습니다.`);
+  renderLobby();
+}
+
+async function acceptChallenge() {
+  const challenge = state.online.incomingChallenge;
+  if (!challenge?.roomCode) return;
+  ui.roomCodeInput.value = challenge.roomCode;
+  await joinRoom();
+  const { api, instance } = state.online.db;
+  await api.setDoc(api.doc(instance, "ball-target-challenges", state.online.user.uid), {
+    status: "accepted",
+    acceptedAt: Date.now()
+  }, { merge: true });
+  state.online.incomingChallenge = null;
+  renderLobby();
+}
+
+async function declineChallenge() {
+  if (!state.online.user || !state.online.db) return;
+  const { api, instance } = state.online.db;
+  await api.setDoc(api.doc(instance, "ball-target-challenges", state.online.user.uid), {
+    status: "declined",
+    declinedAt: Date.now()
+  }, { merge: true });
+  state.online.incomingChallenge = null;
+  renderLobby();
+  setMessage("도전을 거절했습니다.");
 }
 
 async function fetchRoom(code) {
@@ -1246,6 +1498,35 @@ ui.difficultySelect.addEventListener("change", () => {
 });
 ui.itemButtons.forEach((button) => {
   button.addEventListener("click", () => selectItem(button.dataset.item));
+});
+ui.lobbyTabs.forEach((button) => {
+  button.addEventListener("click", () => {
+    state.online.lobbyTab = button.dataset.lobbyTab;
+    renderLobby();
+  });
+});
+ui.lobbyContent.addEventListener("click", (event) => {
+  const challengeButton = event.target.closest("[data-challenge-uid]");
+  if (challengeButton) {
+    challengeUser(challengeButton.dataset.challengeUid).catch((error) => {
+      console.warn("도전 전송 실패", error);
+      setMessage("도전을 보내지 못했습니다. Firestore 권한을 확인해 주세요.");
+    });
+    return;
+  }
+  const buyButton = event.target.closest("[data-buy-item]");
+  if (buyButton) buyItem(buyButton.dataset.buyItem);
+});
+ui.challengeNotice.addEventListener("click", (event) => {
+  if (event.target.closest("[data-accept-challenge]")) {
+    acceptChallenge().catch((error) => {
+      console.warn("도전 수락 실패", error);
+      setMessage("도전을 수락하지 못했습니다. 방이 사라졌거나 권한이 부족합니다.");
+    });
+  }
+  if (event.target.closest("[data-decline-challenge]")) {
+    declineChallenge().catch((error) => console.warn("도전 거절 실패", error));
+  }
 });
 ui.soundButton.addEventListener("click", () => {
   ensureAudio();

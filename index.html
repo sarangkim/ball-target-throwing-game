@@ -79,6 +79,18 @@
           <p id="onlineHint">Google 로그인과 Firebase 설정 후 온라인 대전이 활성화됩니다.</p>
         </section>
 
+        <section class="lobby-panel" aria-label="로비">
+          <div class="lobby-tabs">
+            <button type="button" data-lobby-tab="players" class="active">도전</button>
+            <button type="button" data-lobby-tab="profile">내정보</button>
+            <button type="button" data-lobby-tab="missions">미션</button>
+            <button type="button" data-lobby-tab="shop">상점</button>
+            <button type="button" data-lobby-tab="help">도움말</button>
+          </div>
+          <div id="challengeNotice" class="challenge-notice"></div>
+          <div id="lobbyContent" class="lobby-content"></div>
+        </section>
+
         <div class="message" id="message" aria-live="polite">
           3판 2승 시작! 공을 뒤로 당겼다가 과녁을 향해 놓아보세요.
         </div>
