@@ -10,7 +10,9 @@ const ui = {
   difficultySelect: document.querySelector("#difficultySelect"),
   createRoomButton: document.querySelector("#createRoomButton"),
   joinRoomButton: document.querySelector("#joinRoomButton"),
+  copyInviteButton: document.querySelector("#copyInviteButton"),
   roomCodeInput: document.querySelector("#roomCodeInput"),
+  inviteLinkBox: document.querySelector("#inviteLinkBox"),
   onlineHint: document.querySelector("#onlineHint"),
   message: document.querySelector("#message"),
   playerOneRow: document.querySelector("#playerOneRow"),
@@ -135,6 +137,7 @@ const state = {
     auth: null,
     user: null,
     localPlayerIndex: null,
+    pendingRoomCode: "",
     roomCode: "",
     unsub: null,
     syncing: false
@@ -781,6 +784,7 @@ function configureOnlinePlayers(localIndex) {
     name: index === localIndex ? onlinePlayerName(`플레이어 ${index + 1}`) : player.name.replace("컴퓨터", "상대 대기"),
     isComputer: false
   }));
+  updateOnlineUi();
 }
 
 function resetScoresForCurrentMode() {
@@ -837,6 +841,7 @@ function updateUi() {
   ui.ticketCount.textContent = state.players[0].tickets + state.players[1].tickets;
   ui.missionLabel.textContent = state.currentMission.text;
   updateItemButtons();
+  updateOnlineUi();
   ui.playerOneRow.classList.toggle("active", state.currentPlayer === 0 && !state.gameOver);
   ui.playerTwoRow.classList.toggle("active", state.currentPlayer === 1 && !state.gameOver);
   ui.ballsLeft.textContent = Math.max(0, state.throwsPerPlayer - state.players[state.currentPlayer].throws.length);
@@ -1015,7 +1020,8 @@ async function initFirebase() {
     };
     state.online.provider = new authModule.GoogleAuthProvider();
     state.online.enabled = true;
-    ui.onlineHint.textContent = "Google 로그인 후 방을 만들거나 코드로 입장할 수 있습니다.";
+    hydrateRoomFromUrl();
+    updateOnlineUi();
   } catch (error) {
     console.warn("Firebase 초기화 실패", error);
   }
@@ -1031,8 +1037,55 @@ async function signInWithGoogle() {
   state.online.user = result.user;
   state.players[0].name = result.user.displayName || "Google 플레이어";
   ui.googleButton.textContent = state.players[0].name;
-  setMessage("Google 로그인 완료. 온라인 방을 만들 수 있어요.");
+  updateOnlineUi();
+  if (state.online.pendingRoomCode && !state.online.roomCode) {
+    ui.roomCodeInput.value = state.online.pendingRoomCode;
+    setMessage(`${state.online.pendingRoomCode} 방 코드가 준비됐습니다. 입장을 누르세요.`);
+  } else {
+    setMessage("Google 로그인 완료. 온라인 방을 만들 수 있어요.");
+  }
   updateUi();
+}
+
+function hydrateRoomFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const code = (params.get("room") || "").trim().toUpperCase();
+  if (!code) return;
+  state.online.pendingRoomCode = code;
+  ui.roomCodeInput.value = code;
+  ui.inviteLinkBox.textContent = makeInviteLink(code);
+  ui.onlineHint.textContent = state.online.user ? `${code} 방에 입장할 수 있습니다.` : `${code} 초대 링크입니다. Google 로그인 후 입장하세요.`;
+}
+
+function makeInviteLink(code = state.online.roomCode) {
+  if (!code) return "";
+  const url = new URL(window.location.href);
+  url.searchParams.set("room", code);
+  url.searchParams.set("v", "online");
+  return url.toString();
+}
+
+function setRoomUrl(code) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("room", code);
+  url.searchParams.set("v", "online");
+  window.history.replaceState({}, "", url);
+}
+
+function updateOnlineUi() {
+  const code = state.online.roomCode || state.online.pendingRoomCode || ui.roomCodeInput.value.trim().toUpperCase();
+  const link = makeInviteLink(code);
+  ui.copyInviteButton.disabled = !code;
+  ui.inviteLinkBox.textContent = link || "방을 만들면 초대 링크가 여기에 표시됩니다.";
+  if (!state.online.enabled) {
+    ui.onlineHint.textContent = "Firebase 설정 후 온라인 대전이 활성화됩니다.";
+  } else if (!state.online.user) {
+    ui.onlineHint.textContent = code ? "Google 로그인 후 초대받은 방에 입장하세요." : "Google 로그인 후 방을 만들거나 초대 링크로 입장하세요.";
+  } else if (state.online.roomCode) {
+    ui.onlineHint.textContent = state.online.localPlayerIndex === 0 ? "초대 링크를 상대에게 보내세요." : "상대와 연결됐습니다. 내 차례에 던지세요.";
+  } else {
+    ui.onlineHint.textContent = "방을 만들거나 상대의 방 코드로 입장하세요.";
+  }
 }
 
 function roomPayload() {
@@ -1053,6 +1106,7 @@ async function createRoom() {
   if (!canUseOnline()) return;
   const code = Math.random().toString(36).slice(2, 8).toUpperCase();
   state.online.roomCode = code;
+  state.online.pendingRoomCode = "";
   configureOnlinePlayers(0);
   state.players[1].name = "상대 대기";
   resetGame();
@@ -1060,7 +1114,9 @@ async function createRoom() {
   listenRoom();
   ui.roomCodeInput.value = code;
   ui.roomStatus.textContent = `온라인 방 ${code}`;
-  setMessage(`방 코드 ${code}를 친구에게 알려주세요.`);
+  setRoomUrl(code);
+  updateOnlineUi();
+  setMessage(`방 ${code} 생성 완료. 초대 링크를 상대에게 보내세요.`);
 }
 
 async function joinRoom() {
@@ -1071,6 +1127,7 @@ async function joinRoom() {
     return;
   }
   state.online.roomCode = code;
+  state.online.pendingRoomCode = "";
   const roomData = await fetchRoom(code);
   if (!roomData) {
     setMessage(`${code} 방을 찾을 수 없습니다.`);
@@ -1082,6 +1139,8 @@ async function joinRoom() {
   await saveRoom(false);
   listenRoom();
   ui.roomStatus.textContent = `온라인 방 ${code}`;
+  setRoomUrl(code);
+  updateOnlineUi();
   setMessage(`${code} 방에 입장했습니다.`);
 }
 
@@ -1103,9 +1162,12 @@ function canUseOnline() {
 async function saveRoom(reset = false) {
   const { api, instance } = state.online.db;
   const ref = api.doc(instance, "ball-target-rooms", state.online.roomCode);
+  const roleData = state.online.localPlayerIndex === 0
+    ? { hostUid: state.online.user.uid, hostName: onlinePlayerName("플레이어 1") }
+    : { guestUid: state.online.user.uid, guestName: onlinePlayerName("플레이어 2") };
   await api.setDoc(ref, {
     ...roomPayload(),
-    host: state.online.user.uid,
+    ...roleData,
     reset
   }, { merge: true });
 }
@@ -1133,6 +1195,8 @@ function listenRoom() {
 
 function applyRoomData(data) {
   state.players = data.players || state.players;
+  if (data.hostName && state.players[0]) state.players[0].name = data.hostName;
+  if (data.guestName && state.players[1]) state.players[1].name = data.guestName;
   state.currentPlayer = data.currentPlayer || 0;
   state.vsComputer = Boolean(data.vsComputer);
   state.computerDifficulty = data.computerDifficulty || state.computerDifficulty;
@@ -1143,6 +1207,7 @@ function applyRoomData(data) {
   state.currentMission = missions[state.missionIndex] || missions[0];
   state.gameOver = Boolean(data.gameOver);
   ui.roomStatus.textContent = state.online.roomCode ? `온라인 방 ${state.online.roomCode}` : "컴퓨터 대전";
+  updateOnlineUi();
 }
 
 window.addEventListener("resize", resizeCanvas);
@@ -1154,6 +1219,26 @@ ui.resetButton.addEventListener("click", resetGame);
 ui.googleButton.addEventListener("click", signInWithGoogle);
 ui.createRoomButton.addEventListener("click", createRoom);
 ui.joinRoomButton.addEventListener("click", joinRoom);
+ui.copyInviteButton.addEventListener("click", async () => {
+  const code = state.online.roomCode || state.online.pendingRoomCode || ui.roomCodeInput.value.trim().toUpperCase();
+  const link = makeInviteLink(code);
+  if (!link) {
+    setMessage("먼저 방을 만들거나 방 코드를 입력하세요.");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(link);
+    setMessage("초대 링크를 복사했습니다.");
+  } catch {
+    ui.inviteLinkBox.textContent = link;
+    setMessage("복사가 막혔습니다. 표시된 링크를 길게 눌러 복사하세요.");
+  }
+});
+ui.roomCodeInput.addEventListener("input", () => {
+  ui.roomCodeInput.value = ui.roomCodeInput.value.toUpperCase();
+  state.online.pendingRoomCode = ui.roomCodeInput.value.trim().toUpperCase();
+  updateOnlineUi();
+});
 ui.difficultySelect.addEventListener("change", () => {
   state.computerDifficulty = ui.difficultySelect.value;
   setMessage(`컴퓨터 난이도: ${difficultyProfiles[state.computerDifficulty].label}`);
