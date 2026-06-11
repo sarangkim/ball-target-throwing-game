@@ -201,6 +201,9 @@ const state = {
     onlineUsers: [],
     incomingChallenge: null,
     lobbyTab: "players",
+    initializing: false,
+    initError: "",
+    authError: "",
     syncing: false
   }
 };
@@ -977,6 +980,13 @@ function renderLobby() {
   const player = localRewardPlayer();
   const tab = state.online.lobbyTab;
   if (tab === "players") {
+    if (state.online.initError || state.online.authError) {
+      ui.lobbyContent.innerHTML = `
+        <h2>로그인 유저</h2>
+        <p class="lobby-empty">${escapeHtml(state.online.authError || state.online.initError)}</p>
+      `;
+      return;
+    }
     const users = state.online.onlineUsers.filter((user) => user.uid !== state.online.user?.uid);
     const userCards = users.length
       ? users.map((user) => `
@@ -1253,8 +1263,14 @@ function playFinale() {
 
 async function initFirebase() {
   try {
+    state.online.initializing = true;
+    state.online.initError = "";
+    updateOnlineUi();
     const { firebaseConfig } = await import("./firebase-config.js");
-    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") return;
+    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
+      state.online.initError = "Firebase 설정 파일에 API 키가 없습니다.";
+      return;
+    }
     const appModule = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js");
     const authModule = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js");
     const dbModule = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js");
@@ -1266,6 +1282,7 @@ async function initFirebase() {
     };
     state.online.provider = new authModule.GoogleAuthProvider();
     state.online.enabled = true;
+    state.online.initializing = false;
     authModule.onAuthStateChanged(state.online.auth, async (user) => {
       if (!user) return;
       state.online.user = user;
@@ -1277,25 +1294,67 @@ async function initFirebase() {
     });
     updateOnlineUi();
   } catch (error) {
+    state.online.enabled = false;
+    state.online.initializing = false;
+    state.online.initError = firebaseErrorMessage(error, "Firebase 초기화에 실패했습니다.");
+    updateOnlineUi();
     console.warn("Firebase 초기화 실패", error);
+  } finally {
+    state.online.initializing = false;
+    updateOnlineUi();
   }
 }
 
 async function signInWithGoogle() {
   if (!state.online.enabled) {
-    setMessage("Firebase 설정을 먼저 입력하면 Google 로그인이 켜집니다.");
+    setMessage(state.online.initError || "Firebase 준비가 끝난 뒤 다시 눌러주세요.");
     return;
   }
-  const authModule = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js");
-  const result = await authModule.signInWithPopup(state.online.auth, state.online.provider);
-  state.online.user = result.user;
-  state.players[0].name = result.user.displayName || "Google 플레이어";
-  ui.googleButton.textContent = state.players[0].name;
-  ui.lobbyGoogleButton.textContent = state.players[0].name;
-  await registerLobbyPresence();
-  updateOnlineUi();
-  setMessage("Google 로그인 완료. 로비에서 접속한 상대에게 도전할 수 있어요.");
-  updateUi();
+  try {
+    ui.lobbyGoogleButton.disabled = true;
+    ui.googleButton.disabled = true;
+    ui.lobbyGoogleButton.textContent = "로그인 중...";
+    state.online.authError = "";
+    setMessage("Google 로그인 창을 확인해 주세요.");
+    const authModule = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js");
+    const result = await authModule.signInWithPopup(state.online.auth, state.online.provider);
+    state.online.user = result.user;
+    state.online.authError = "";
+    state.players[0].name = result.user.displayName || "Google 플레이어";
+    ui.googleButton.textContent = state.players[0].name;
+    ui.lobbyGoogleButton.textContent = state.players[0].name;
+    await registerLobbyPresence();
+    updateOnlineUi();
+    setMessage("Google 로그인 완료. 로비에서 접속한 상대에게 도전할 수 있어요.");
+    updateUi();
+  } catch (error) {
+    const message = firebaseErrorMessage(error, "Google 로그인에 실패했습니다.");
+    state.online.authError = message;
+    setMessage(message);
+    ui.lobbyStatus.textContent = message;
+    console.warn("Google 로그인 실패", error);
+  } finally {
+    ui.lobbyGoogleButton.disabled = false;
+    ui.googleButton.disabled = false;
+    updateOnlineUi();
+  }
+}
+
+function firebaseErrorMessage(error, fallback) {
+  const code = error?.code || "";
+  if (code.includes("auth/unauthorized-domain")) {
+    return "Firebase Authentication 승인 도메인에 throw.chocomoi.com을 추가해야 로그인할 수 있습니다.";
+  }
+  if (code.includes("auth/popup-blocked")) {
+    return "팝업이 차단되었습니다. 브라우저의 팝업 허용 후 다시 로그인해 주세요.";
+  }
+  if (code.includes("auth/popup-closed-by-user")) {
+    return "로그인 창이 닫혔습니다. 다시 Google 로그인을 눌러주세요.";
+  }
+  if (code.includes("permission-denied")) {
+    return "Firestore 권한이 막혔습니다. firestore.rules를 Firebase 콘솔에 반영해 주세요.";
+  }
+  return error?.message ? `${fallback} (${error.message})` : fallback;
 }
 
 async function registerLobbyPresence() {
@@ -1360,10 +1419,25 @@ function setRoomUrl() {
 
 function updateOnlineUi() {
   const status = state.online.roomCode ? `온라인 방 ${state.online.roomCode}` : state.screen === "game" && state.vsComputer ? "컴퓨터 대전" : "로비 대기";
-  if (!state.online.enabled) {
-    ui.lobbyStatus.textContent = "Firebase 설정 후 온라인 대전이 활성화됩니다.";
+  if (state.online.initializing) {
+    ui.lobbyStatus.textContent = "온라인 로비를 준비하는 중입니다...";
+    ui.lobbyGoogleButton.textContent = "준비 중...";
+    ui.lobbyGoogleButton.disabled = true;
+    ui.googleButton.disabled = true;
+  } else if (!state.online.enabled) {
+    ui.lobbyStatus.textContent = state.online.initError || "Firebase 설정 후 온라인 대전이 활성화됩니다.";
+    ui.lobbyGoogleButton.textContent = "Google 로그인";
+    ui.lobbyGoogleButton.disabled = false;
+    ui.googleButton.disabled = false;
+  } else if (state.online.authError) {
+    ui.lobbyStatus.textContent = state.online.authError;
+    ui.lobbyGoogleButton.disabled = false;
+    ui.googleButton.disabled = false;
   } else if (!state.online.user) {
-    ui.lobbyStatus.textContent = "Google 로그인 후 접속한 사람에게 도전할 수 있습니다.";
+    ui.lobbyStatus.textContent = state.online.authError || "Google 로그인 후 접속한 사람에게 도전할 수 있습니다.";
+    ui.lobbyGoogleButton.textContent = "Google 로그인";
+    ui.lobbyGoogleButton.disabled = false;
+    ui.googleButton.disabled = false;
   } else if (state.online.roomCode) {
     ui.lobbyStatus.textContent = `${status}에서 플레이 중입니다.`;
   } else {
