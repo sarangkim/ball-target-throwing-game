@@ -63,3 +63,11 @@ python -m http.server 5173
 ## Firestore 규칙
 
 온라인 로비를 사용하려면 Firebase 콘솔의 Firestore Rules에 `firestore.rules` 내용을 반영해야 합니다. 새로 쓰는 컬렉션은 `ball-target-users`, `ball-target-challenges`, `ball-target-rooms`입니다.
+
+## 최신 플레이 흐름
+
+1. 앱 첫 화면은 로비입니다.
+2. Google 로그인 후 `도전` 탭에서 접속 중인 플레이어에게 바로 도전할 수 있습니다.
+3. 접속 중인 상대가 없으면 `컴퓨터와 게임하기`로 바로 게임을 시작합니다.
+4. 방 코드 입력과 초대 링크 UI는 사용하지 않습니다.
+5. 게임 세션과 라운드에 따라 과녁 형태와 점수 배치가 달라집니다.

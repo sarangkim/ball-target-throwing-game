@@ -2,18 +2,18 @@ const canvas = document.querySelector("#gameCanvas");
 const ctx = canvas.getContext("2d");
 
 const ui = {
+  appShell: document.querySelector(".app-shell"),
   stage: document.querySelector(".game-stage"),
+  lobbyStatus: document.querySelector("#lobbyStatus"),
+  lobbyGoogleButton: document.querySelector("#lobbyGoogleButton"),
+  playComputerButton: document.querySelector("#playComputerButton"),
+  refreshLobbyButton: document.querySelector("#refreshLobbyButton"),
   roomStatus: document.querySelector("#roomStatus"),
   soundButton: document.querySelector("#soundButton"),
   googleButton: document.querySelector("#googleButton"),
+  backToLobbyButton: document.querySelector("#backToLobbyButton"),
   resetButton: document.querySelector("#resetButton"),
   difficultySelect: document.querySelector("#difficultySelect"),
-  createRoomButton: document.querySelector("#createRoomButton"),
-  joinRoomButton: document.querySelector("#joinRoomButton"),
-  copyInviteButton: document.querySelector("#copyInviteButton"),
-  roomCodeInput: document.querySelector("#roomCodeInput"),
-  inviteLinkBox: document.querySelector("#inviteLinkBox"),
-  onlineHint: document.querySelector("#onlineHint"),
   lobbyContent: document.querySelector("#lobbyContent"),
   challengeNotice: document.querySelector("#challengeNotice"),
   lobbyTabs: [...document.querySelectorAll("[data-lobby-tab]")],
@@ -48,6 +48,49 @@ const targetArtRings = [
   { outer: 0.52, inner: 0.31, scores: [30, 40, 50, 20, 50, 40, 30, 20] },
   { outer: 0.31, inner: 0.13, scores: [90, 70, 60, 80] },
   { outer: 0.13, inner: 0, scores: [100] }
+];
+const targetVariants = [
+  {
+    name: "클래식",
+    scoreRings,
+    artRings: targetArtRings,
+    rotation: 0,
+    colorShift: 0
+  },
+  {
+    name: "스파이럴",
+    scoreRings: [
+      { limit: 0.12, scores: [120] },
+      { limit: 0.31, scores: [70, 90, 60, 80] },
+      { limit: 0.54, scores: [20, 50, 30, 60, 40, 50, 20, 40] },
+      { limit: 0.8, scores: [15, 10, 25, 10, 15, 10, 25, 10] }
+    ],
+    artRings: [
+      { outer: 0.8, inner: 0.54, scores: [15, 10, 25, 10, 15, 10, 25, 10] },
+      { outer: 0.54, inner: 0.31, scores: [20, 50, 30, 60, 40, 50, 20, 40] },
+      { outer: 0.31, inner: 0.12, scores: [70, 90, 60, 80] },
+      { outer: 0.12, inner: 0, scores: [120] }
+    ],
+    rotation: Math.PI / 8,
+    colorShift: 1
+  },
+  {
+    name: "키즈 챌린지",
+    scoreRings: [
+      { limit: 0.1, scores: [150] },
+      { limit: 0.29, scores: [100, 40, 80, 60, 100, 40] },
+      { limit: 0.5, scores: [30, 70, 20, 50, 30, 70, 20, 50] },
+      { limit: 0.74, scores: [5, 20, 10, 30, 5, 20, 10, 30] }
+    ],
+    artRings: [
+      { outer: 0.74, inner: 0.5, scores: [5, 20, 10, 30, 5, 20, 10, 30] },
+      { outer: 0.5, inner: 0.29, scores: [30, 70, 20, 50, 30, 70, 20, 50] },
+      { outer: 0.29, inner: 0.1, scores: [100, 40, 80, 60, 100, 40] },
+      { outer: 0.1, inner: 0, scores: [150] }
+    ],
+    rotation: -Math.PI / 10,
+    colorShift: 2
+  }
 ];
 
 const colors = ["#df4655", "#f3df46", "#81c962", "#2f6dc8"];
@@ -142,6 +185,8 @@ const state = {
   lastHit: null,
   gameOver: false,
   audioOn: false,
+  screen: "lobby",
+  sessionSeed: Math.floor(Math.random() * targetVariants.length),
   online: {
     enabled: false,
     db: null,
@@ -176,18 +221,18 @@ function layout() {
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
   const isMobile = w < 760;
-  const targetRadius = Math.min(w, h) * (isMobile ? 0.32 : 0.28);
+  const targetRadius = Math.min(w, h) * (isMobile ? 0.32 : 0.31);
   return {
     w,
     h,
     target: {
-      x: w * (isMobile ? 0.46 : 0.43),
-      y: h * (isMobile ? 0.36 : 0.44),
+      x: w * (isMobile ? 0.38 : 0.42),
+      y: h * (isMobile ? 0.34 : 0.43),
       r: targetRadius
     },
     ballHome: {
-      x: w * (isMobile ? 0.68 : 0.73),
-      y: h * (isMobile ? 0.66 : 0.77)
+      x: w * (isMobile ? 0.72 : 0.78),
+      y: h * (isMobile ? 0.66 : 0.76)
     }
   };
 }
@@ -268,6 +313,7 @@ function drawRoom(w, h) {
 }
 
 function drawTarget(target) {
+  const variant = currentTargetVariant();
   ctx.save();
   ctx.translate(target.x, target.y);
 
@@ -279,7 +325,8 @@ function drawTarget(target) {
   ctx.lineTo(target.r * 0.22, -target.r * 1.02);
   ctx.stroke();
 
-  targetArtRings.forEach((ring, ringIndex) => {
+  ctx.rotate(variant.rotation || 0);
+  variant.artRings.forEach((ring, ringIndex) => {
     const outer = target.r * ring.outer;
     const inner = target.r * ring.inner;
     const pieces = ring.scores.length;
@@ -291,7 +338,7 @@ function drawTarget(target) {
       ctx.arc(0, 0, outer, start, end);
       ctx.arc(0, 0, inner, end, start, true);
       ctx.closePath();
-      ctx.fillStyle = ringIndex === 3 ? "#df4655" : colors[(i + ringIndex) % colors.length];
+      ctx.fillStyle = ringIndex === 3 ? "#df4655" : colors[(i + ringIndex + variant.colorShift) % colors.length];
       ctx.fill();
       ctx.strokeStyle = "#f4f5f8";
       ctx.lineWidth = target.r * 0.035;
@@ -299,7 +346,7 @@ function drawTarget(target) {
 
       const mid = (start + end) / 2;
       const textRadius = (outer + inner) / 2;
-      ctx.fillStyle = colors[(i + ringIndex) % colors.length] === "#f3df46" ? "#c84652" : "#fff";
+      ctx.fillStyle = colors[(i + ringIndex + variant.colorShift) % colors.length] === "#f3df46" ? "#c84652" : "#fff";
       ctx.font = `800 ${Math.max(18, target.r * (ringIndex === 0 ? 0.18 : 0.12))}px Segoe UI, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -375,14 +422,26 @@ function drawHandAt(x, y, radius, rotation, alpha) {
   ctx.rotate(0.68);
   roundedRect(-7 * scale, -8 * scale, 20 * scale, 56 * scale, 10 * scale);
   ctx.fill();
+  ctx.strokeStyle = "rgba(124, 70, 58, 0.2)";
+  ctx.lineWidth = 1.2 * scale;
+  ctx.beginPath();
+  ctx.moveTo(-2 * scale, 18 * scale);
+  ctx.lineTo(9 * scale, 17 * scale);
+  ctx.stroke();
   ctx.restore();
 
   ctx.strokeStyle = "rgba(124, 70, 58, 0.26)";
   ctx.lineWidth = 1.5 * scale;
   drawPalmLine(-1, -2, 30, 8, scale);
   drawPalmLine(4, 13, 37, 22, scale);
+  drawPalmLine(10, -10, 44, -2, scale);
   ctx.strokeStyle = "rgba(255, 255, 255, 0.34)";
   drawPalmLine(-2, -18, 34, -20, scale);
+
+  ctx.fillStyle = "rgba(145, 84, 70, 0.18)";
+  ctx.beginPath();
+  ctx.ellipse(14 * scale, 8 * scale, 23 * scale, 10 * scale, -0.2, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.restore();
 }
@@ -398,7 +457,13 @@ function drawFinger(x, y, width, height, rotation, scale) {
   ctx.beginPath();
   ctx.moveTo(3 * scale, height * 0.56 * scale);
   ctx.lineTo((width - 3) * scale, height * 0.56 * scale);
+  ctx.moveTo(4 * scale, height * 0.28 * scale);
+  ctx.lineTo((width - 4) * scale, height * 0.28 * scale);
   ctx.stroke();
+  ctx.fillStyle = "rgba(255, 238, 232, 0.72)";
+  ctx.beginPath();
+  ctx.ellipse((width / 2) * scale, 9 * scale, (width * 0.28) * scale, 5 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -491,6 +556,10 @@ function roundedRect(x, y, width, height, radius) {
 
 function currentTheme() {
   return stageThemes[(state.round - 1) % stageThemes.length];
+}
+
+function currentTargetVariant() {
+  return targetVariants[(state.sessionSeed + state.round - 1) % targetVariants.length];
 }
 
 function colorWithAlpha(hex, alpha) {
@@ -613,13 +682,14 @@ function magnetPoint(point, target) {
 }
 
 function scoreAtPoint(point, target, bonusRadius = 0) {
+  const variant = currentTargetVariant();
   const dx = point.x - target.x;
   const dy = point.y - target.y;
   const distanceRatio = Math.max(0, Math.hypot(dx, dy) / target.r - bonusRadius);
-  const ring = scoreRings.find((entry) => distanceRatio <= entry.limit);
+  const ring = variant.scoreRings.find((entry) => distanceRatio <= entry.limit);
   if (!ring) return 0;
   if (ring.scores.length === 1) return ring.scores[0];
-  const angle = (Math.atan2(dy, dx) + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
+  const angle = (Math.atan2(dy, dx) + Math.PI / 2 - (variant.rotation || 0) + Math.PI * 2) % (Math.PI * 2);
   const index = Math.floor((angle / (Math.PI * 2)) * ring.scores.length) % ring.scores.length;
   return ring.scores[index];
 }
@@ -719,7 +789,7 @@ function startNextRound() {
   resetBall();
   updateUi();
   syncRoom(true);
-  setMessage(`${state.round}라운드 시작! ${state.players[state.currentPlayer].name} 먼저 던집니다.`);
+  setMessage(`${state.round}라운드 ${currentTargetVariant().name} 과녁! ${state.players[state.currentPlayer].name} 먼저 던집니다.`);
   maybeStartComputerTurn();
 }
 
@@ -1031,6 +1101,35 @@ function setMessage(text) {
   ui.message.textContent = text;
 }
 
+function setScreen(screen) {
+  state.screen = screen;
+  ui.appShell.classList.toggle("is-lobby", screen === "lobby");
+  ui.appShell.classList.toggle("is-game", screen === "game");
+  updateOnlineUi();
+  if (screen === "game") {
+    requestAnimationFrame(resizeCanvas);
+  } else {
+    updateLobbyPresence();
+    renderLobby();
+  }
+}
+
+function playComputerGame() {
+  if (state.online.unsub) {
+    state.online.unsub();
+    state.online.unsub = null;
+  }
+  state.online.roomCode = "";
+  state.online.localPlayerIndex = null;
+  state.vsComputer = true;
+  state.players[1].name = "컴퓨터";
+  state.players[1].isComputer = true;
+  state.sessionSeed = Math.floor(Math.random() * targetVariants.length);
+  setScreen("game");
+  resetGame();
+  updateLobbyPresence();
+}
+
 function resetGame() {
   resetScoresForCurrentMode();
   state.currentPlayer = 0;
@@ -1045,7 +1144,7 @@ function resetGame() {
   updateUi();
   syncRoom(true);
   ui.roomStatus.textContent = state.vsComputer ? "컴퓨터 대전" : `온라인 방 ${state.online.roomCode}`;
-  setMessage("3판 2승 시작! 공을 뒤로 당겼다가 과녁을 향해 놓아보세요.");
+  setMessage(`${currentTargetVariant().name} 과녁! 3판 2승 시작. 공을 뒤로 당겼다가 과녁을 향해 놓아보세요.`);
   maybeStartComputerTurn();
 }
 
@@ -1167,7 +1266,15 @@ async function initFirebase() {
     };
     state.online.provider = new authModule.GoogleAuthProvider();
     state.online.enabled = true;
-    hydrateRoomFromUrl();
+    authModule.onAuthStateChanged(state.online.auth, async (user) => {
+      if (!user) return;
+      state.online.user = user;
+      state.players[0].name = user.displayName || "Google 플레이어";
+      ui.googleButton.textContent = state.players[0].name;
+      ui.lobbyGoogleButton.textContent = state.players[0].name;
+      await registerLobbyPresence();
+      updateUi();
+    });
     updateOnlineUi();
   } catch (error) {
     console.warn("Firebase 초기화 실패", error);
@@ -1184,14 +1291,10 @@ async function signInWithGoogle() {
   state.online.user = result.user;
   state.players[0].name = result.user.displayName || "Google 플레이어";
   ui.googleButton.textContent = state.players[0].name;
+  ui.lobbyGoogleButton.textContent = state.players[0].name;
   await registerLobbyPresence();
   updateOnlineUi();
-  if (state.online.pendingRoomCode && !state.online.roomCode) {
-    ui.roomCodeInput.value = state.online.pendingRoomCode;
-    setMessage(`${state.online.pendingRoomCode} 방 코드가 준비됐습니다. 입장을 누르세요.`);
-  } else {
-    setMessage("Google 로그인 완료. 온라인 방을 만들 수 있어요.");
-  }
+  setMessage("Google 로그인 완료. 로비에서 접속한 상대에게 도전할 수 있어요.");
   updateUi();
 }
 
@@ -1242,43 +1345,35 @@ async function updateLobbyPresence() {
 }
 
 function hydrateRoomFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const code = (params.get("room") || "").trim().toUpperCase();
-  if (!code) return;
-  state.online.pendingRoomCode = code;
-  ui.roomCodeInput.value = code;
-  ui.inviteLinkBox.textContent = makeInviteLink(code);
-  ui.onlineHint.textContent = state.online.user ? `${code} 방에 입장할 수 있습니다.` : `${code} 초대 링크입니다. Google 로그인 후 입장하세요.`;
+  state.online.pendingRoomCode = "";
 }
 
 function makeInviteLink(code = state.online.roomCode) {
-  if (!code) return "";
-  const url = new URL(window.location.href);
-  url.searchParams.set("room", code);
-  url.searchParams.set("v", "online");
-  return url.toString();
+  return code ? window.location.href.split("?")[0] : "";
 }
 
-function setRoomUrl(code) {
+function setRoomUrl() {
   const url = new URL(window.location.href);
-  url.searchParams.set("room", code);
-  url.searchParams.set("v", "online");
+  url.search = "";
   window.history.replaceState({}, "", url);
 }
 
 function updateOnlineUi() {
-  const code = state.online.roomCode || state.online.pendingRoomCode || ui.roomCodeInput.value.trim().toUpperCase();
-  const link = makeInviteLink(code);
-  ui.copyInviteButton.disabled = !code;
-  ui.inviteLinkBox.textContent = link || "방을 만들면 초대 링크가 여기에 표시됩니다.";
+  const status = state.online.roomCode ? `온라인 방 ${state.online.roomCode}` : state.screen === "game" && state.vsComputer ? "컴퓨터 대전" : "로비 대기";
   if (!state.online.enabled) {
-    ui.onlineHint.textContent = "Firebase 설정 후 온라인 대전이 활성화됩니다.";
+    ui.lobbyStatus.textContent = "Firebase 설정 후 온라인 대전이 활성화됩니다.";
   } else if (!state.online.user) {
-    ui.onlineHint.textContent = code ? "Google 로그인 후 초대받은 방에 입장하세요." : "Google 로그인 후 방을 만들거나 초대 링크로 입장하세요.";
+    ui.lobbyStatus.textContent = "Google 로그인 후 접속한 사람에게 도전할 수 있습니다.";
   } else if (state.online.roomCode) {
-    ui.onlineHint.textContent = state.online.localPlayerIndex === 0 ? "초대 링크를 상대에게 보내세요." : "상대와 연결됐습니다. 내 차례에 던지세요.";
+    ui.lobbyStatus.textContent = `${status}에서 플레이 중입니다.`;
   } else {
-    ui.onlineHint.textContent = "방을 만들거나 상대의 방 코드로 입장하세요.";
+    ui.lobbyStatus.textContent = "접속자 목록에서 상대에게 도전하세요.";
+  }
+  ui.roomStatus.textContent = status;
+  if (state.online.user) {
+    const name = state.online.user.displayName || "Google 플레이어";
+    ui.googleButton.textContent = name;
+    ui.lobbyGoogleButton.textContent = name;
   }
 }
 
@@ -1291,6 +1386,7 @@ function roomPayload() {
     round: state.round,
     roundOver: state.roundOver,
     missionIndex: state.missionIndex,
+    sessionSeed: state.sessionSeed,
     gameOver: state.gameOver,
     updatedAt: Date.now()
   };
@@ -1303,22 +1399,22 @@ async function createRoom() {
   state.online.pendingRoomCode = "";
   configureOnlinePlayers(0);
   state.players[1].name = "상대 대기";
+  state.sessionSeed = Math.floor(Math.random() * targetVariants.length);
   resetGame();
   await saveRoom(true);
   listenRoom();
-  ui.roomCodeInput.value = code;
   ui.roomStatus.textContent = `온라인 방 ${code}`;
   setRoomUrl(code);
   updateLobbyPresence();
   updateOnlineUi();
-  setMessage(`방 ${code} 생성 완료. 초대 링크를 상대에게 보내세요.`);
+  setMessage(`온라인 방 ${code} 생성 완료. 로비에서 상대에게 도전하세요.`);
 }
 
-async function joinRoom() {
+async function joinRoom(codeOverride = "") {
   if (!canUseOnline()) return;
-  const code = ui.roomCodeInput.value.trim().toUpperCase();
+  const code = codeOverride.trim().toUpperCase();
   if (!code) {
-    setMessage("입장할 방 코드를 입력해주세요.");
+    setMessage("입장할 온라인 방 정보가 없습니다.");
     return;
   }
   state.online.roomCode = code;
@@ -1337,6 +1433,7 @@ async function joinRoom() {
   setRoomUrl(code);
   updateLobbyPresence();
   updateOnlineUi();
+  setScreen("game");
   setMessage(`${code} 방에 입장했습니다.`);
 }
 
@@ -1349,10 +1446,10 @@ async function challengeUser(uid) {
   state.online.pendingRoomCode = "";
   configureOnlinePlayers(0);
   state.players[1].name = opponent?.name || "상대 대기";
+  state.sessionSeed = Math.floor(Math.random() * targetVariants.length);
   resetGame();
   await saveRoom(true);
   listenRoom();
-  ui.roomCodeInput.value = code;
   ui.roomStatus.textContent = `온라인 방 ${code}`;
   setRoomUrl(code);
   await updateLobbyPresence();
@@ -1366,6 +1463,7 @@ async function challengeUser(uid) {
     toUid: uid,
     createdAt: Date.now()
   }, { merge: true });
+  setScreen("game");
   setMessage(`${opponent?.name || "상대"}님에게 도전을 보냈습니다.`);
   renderLobby();
 }
@@ -1373,8 +1471,7 @@ async function challengeUser(uid) {
 async function acceptChallenge() {
   const challenge = state.online.incomingChallenge;
   if (!challenge?.roomCode) return;
-  ui.roomCodeInput.value = challenge.roomCode;
-  await joinRoom();
+  await joinRoom(challenge.roomCode);
   const { api, instance } = state.online.db;
   await api.setDoc(api.doc(instance, "ball-target-challenges", state.online.user.uid), {
     status: "accepted",
@@ -1456,6 +1553,7 @@ function applyRoomData(data) {
   state.round = data.round || 1;
   state.roundOver = Boolean(data.roundOver);
   state.missionIndex = Number.isInteger(data.missionIndex) ? data.missionIndex : 0;
+  state.sessionSeed = Number.isInteger(data.sessionSeed) ? data.sessionSeed : state.sessionSeed;
   state.currentMission = missions[state.missionIndex] || missions[0];
   state.gameOver = Boolean(data.gameOver);
   ui.roomStatus.textContent = state.online.roomCode ? `온라인 방 ${state.online.roomCode}` : "컴퓨터 대전";
@@ -1469,28 +1567,14 @@ canvas.addEventListener("pointerup", onPointerUp);
 canvas.addEventListener("pointercancel", onPointerUp);
 ui.resetButton.addEventListener("click", resetGame);
 ui.googleButton.addEventListener("click", signInWithGoogle);
-ui.createRoomButton.addEventListener("click", createRoom);
-ui.joinRoomButton.addEventListener("click", joinRoom);
-ui.copyInviteButton.addEventListener("click", async () => {
-  const code = state.online.roomCode || state.online.pendingRoomCode || ui.roomCodeInput.value.trim().toUpperCase();
-  const link = makeInviteLink(code);
-  if (!link) {
-    setMessage("먼저 방을 만들거나 방 코드를 입력하세요.");
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(link);
-    setMessage("초대 링크를 복사했습니다.");
-  } catch {
-    ui.inviteLinkBox.textContent = link;
-    setMessage("복사가 막혔습니다. 표시된 링크를 길게 눌러 복사하세요.");
-  }
+ui.lobbyGoogleButton.addEventListener("click", signInWithGoogle);
+ui.playComputerButton.addEventListener("click", playComputerGame);
+ui.refreshLobbyButton.addEventListener("click", () => {
+  updateLobbyPresence();
+  renderLobby();
+  setMessage("로비 목록을 새로 확인했습니다.");
 });
-ui.roomCodeInput.addEventListener("input", () => {
-  ui.roomCodeInput.value = ui.roomCodeInput.value.toUpperCase();
-  state.online.pendingRoomCode = ui.roomCodeInput.value.trim().toUpperCase();
-  updateOnlineUi();
-});
+ui.backToLobbyButton.addEventListener("click", () => setScreen("lobby"));
 ui.difficultySelect.addEventListener("change", () => {
   state.computerDifficulty = ui.difficultySelect.value;
   setMessage(`컴퓨터 난이도: ${difficultyProfiles[state.computerDifficulty].label}`);

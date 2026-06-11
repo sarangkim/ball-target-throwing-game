@@ -7,7 +7,50 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="app-shell">
+    <main class="app-shell is-lobby">
+      <section class="lobby-screen" aria-label="게임 로비">
+        <div class="lobby-hero">
+          <div class="brand lobby-brand">
+            <span class="brand-mark">공</span>
+            <div>
+              <strong>공던지기 타겟 챌린지</strong>
+              <span id="lobbyStatus">Google 로그인 후 친구에게 바로 도전하세요.</span>
+            </div>
+          </div>
+          <div class="lobby-primary-actions">
+            <button id="lobbyGoogleButton" type="button">Google 로그인</button>
+            <button id="playComputerButton" type="button">컴퓨터와 게임하기</button>
+          </div>
+        </div>
+
+        <div class="lobby-layout">
+          <section class="lobby-board">
+            <div class="lobby-board-header">
+              <div>
+                <strong>온라인 도전</strong>
+                <span>로그인한 사람을 골라 바로 경기 신청</span>
+              </div>
+              <button id="refreshLobbyButton" type="button">새로고침</button>
+            </div>
+            <div id="challengeNotice" class="challenge-notice"></div>
+            <div id="lobbyContent" class="lobby-content"></div>
+          </section>
+
+          <aside class="lobby-side">
+            <div class="lobby-tabs">
+              <button type="button" data-lobby-tab="players" class="active">도전</button>
+              <button type="button" data-lobby-tab="profile">내정보</button>
+              <button type="button" data-lobby-tab="missions">미션</button>
+              <button type="button" data-lobby-tab="shop">상점</button>
+              <button type="button" data-lobby-tab="help">도움말</button>
+            </div>
+            <div class="lobby-tip">
+              접속자가 없으면 컴퓨터와 바로 연습할 수 있어요. 온라인 상대가 들어오면 도전 목록에 표시됩니다.
+            </div>
+          </aside>
+        </div>
+      </section>
+
       <section class="game-stage" aria-label="공던지기 게임">
         <canvas id="gameCanvas" width="960" height="620"></canvas>
 
@@ -28,6 +71,7 @@
               <option value="hard">어려움</option>
             </select>
             <button id="googleButton" type="button">Google 로그인</button>
+            <button id="backToLobbyButton" type="button">로비</button>
             <button id="resetButton" type="button">새 경기</button>
           </div>
         </div>
@@ -67,29 +111,6 @@
           </div>
           <div class="history" id="throwHistory" aria-live="polite"></div>
         </aside>
-
-        <section class="online-panel" aria-label="온라인 플레이">
-          <div class="online-actions">
-            <button id="createRoomButton" type="button">방 만들기</button>
-            <input id="roomCodeInput" type="text" placeholder="방 코드" maxlength="8" />
-            <button id="joinRoomButton" type="button">입장</button>
-            <button id="copyInviteButton" type="button">초대 링크</button>
-          </div>
-          <div class="invite-link" id="inviteLinkBox">방을 만들면 초대 링크가 여기에 표시됩니다.</div>
-          <p id="onlineHint">Google 로그인과 Firebase 설정 후 온라인 대전이 활성화됩니다.</p>
-        </section>
-
-        <section class="lobby-panel" aria-label="로비">
-          <div class="lobby-tabs">
-            <button type="button" data-lobby-tab="players" class="active">도전</button>
-            <button type="button" data-lobby-tab="profile">내정보</button>
-            <button type="button" data-lobby-tab="missions">미션</button>
-            <button type="button" data-lobby-tab="shop">상점</button>
-            <button type="button" data-lobby-tab="help">도움말</button>
-          </div>
-          <div id="challengeNotice" class="challenge-notice"></div>
-          <div id="lobbyContent" class="lobby-content"></div>
-        </section>
 
         <div class="message" id="message" aria-live="polite">
           3판 2승 시작! 공을 뒤로 당겼다가 과녁을 향해 놓아보세요.
