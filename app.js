@@ -1322,13 +1322,6 @@ async function signInWithGoogle() {
     const result = await withPopupTimeout(authModule.signInWithPopup(state.online.auth, state.online.provider));
     await completeGoogleLogin(result.user);
   } catch (error) {
-    if (shouldUseRedirectLogin(error)) {
-      const authModule = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js");
-      state.online.authError = "팝업 로그인이 닫혀서 전체 화면 로그인으로 전환합니다.";
-      updateOnlineUi();
-      await authModule.signInWithRedirect(state.online.auth, state.online.provider);
-      return;
-    }
     const message = firebaseErrorMessage(error, "Google 로그인에 실패했습니다.");
     state.online.authError = message;
     setMessage(message);
@@ -1358,14 +1351,6 @@ async function completeGoogleLogin(user) {
   updateUi();
 }
 
-function shouldUseRedirectLogin(error) {
-  const code = error?.code || "";
-  return code.includes("auth/popup-blocked")
-    || code.includes("auth/popup-closed-by-user")
-    || code.includes("auth/cancelled-popup-request")
-    || code.includes("auth/popup-timeout");
-}
-
 function withPopupTimeout(promise) {
   return Promise.race([
     promise,
@@ -1387,6 +1372,12 @@ function firebaseErrorMessage(error, fallback) {
   }
   if (code.includes("auth/popup-closed-by-user")) {
     return "로그인 창이 닫혔습니다. 다시 Google 로그인을 눌러주세요.";
+  }
+  if (code.includes("auth/cancelled-popup-request")) {
+    return "이미 로그인 창이 열려 있습니다. 열린 창을 닫고 다시 눌러주세요.";
+  }
+  if (code.includes("auth/popup-timeout")) {
+    return "로그인 창 응답이 늦습니다. 팝업 창을 닫고 다시 Google 로그인을 눌러주세요.";
   }
   if (code.includes("permission-denied")) {
     return "Firestore 권한이 막혔습니다. firestore.rules를 Firebase 콘솔에 반영해 주세요.";
