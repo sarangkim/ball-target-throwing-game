@@ -132,6 +132,12 @@ const missions = [
   { text: "미션: 과녁 안에 꼭 붙이기", test: (score) => score > 0 },
   { text: "미션: 100점 중앙 도전", test: (score) => score === 100 }
 ];
+const roundTwists = [
+  { id: "comeback", name: "역전 찬스", desc: "지고 있는 플레이어가 맞히면 20점 보너스" },
+  { id: "perfect", name: "중앙 축제", desc: "100점 이상이면 별과 티켓을 추가 획득" },
+  { id: "combo", name: "콤보 파티", desc: "연속 성공 2회부터 10점 보너스" },
+  { id: "ticket", name: "티켓 데이", desc: "50점 이상 성공하면 티켓 1장 추가" }
+];
 const stageThemes = [
   {
     name: "회전목마 광장",
@@ -414,23 +420,36 @@ function drawHandAt(x, y, radius, rotation, alpha) {
   roundedRect(-10 * scale, -16 * scale, 62 * scale, 56 * scale, 24 * scale);
   ctx.fill();
 
+  const palmShade = ctx.createRadialGradient(16 * scale, 8 * scale, 4 * scale, 16 * scale, 8 * scale, 48 * scale);
+  palmShade.addColorStop(0, "rgba(255, 229, 220, 0.44)");
+  palmShade.addColorStop(1, "rgba(144, 78, 62, 0.18)");
+  ctx.fillStyle = palmShade;
+  roundedRect(-8 * scale, -14 * scale, 58 * scale, 52 * scale, 22 * scale);
+  ctx.fill();
+
   ctx.fillStyle = "#f8c7b8";
-  drawFinger(-18, -48, 17, 58, -0.1, scale);
-  drawFinger(2, -56, 17, 66, -0.03, scale);
-  drawFinger(22, -51, 16, 61, 0.05, scale);
-  drawFinger(40, -39, 14, 50, 0.16, scale);
+  drawFinger(-20, -48, 17, 58, -0.16, scale, 0.82);
+  drawFinger(0, -58, 18, 68, -0.05, scale, 0.9);
+  drawFinger(22, -52, 17, 62, 0.08, scale, 0.78);
+  drawFinger(41, -38, 15, 50, 0.2, scale, 0.68);
 
   ctx.save();
-  ctx.translate(-18 * scale, 10 * scale);
-  ctx.rotate(0.68);
-  roundedRect(-7 * scale, -8 * scale, 20 * scale, 56 * scale, 10 * scale);
+  ctx.translate(-22 * scale, 10 * scale);
+  ctx.rotate(0.78);
+  roundedRect(-7 * scale, -9 * scale, 22 * scale, 60 * scale, 11 * scale);
   ctx.fill();
   ctx.strokeStyle = "rgba(124, 70, 58, 0.2)";
   ctx.lineWidth = 1.2 * scale;
   ctx.beginPath();
   ctx.moveTo(-2 * scale, 18 * scale);
   ctx.lineTo(9 * scale, 17 * scale);
+  ctx.moveTo(0, 33 * scale);
+  ctx.lineTo(11 * scale, 31 * scale);
   ctx.stroke();
+  ctx.fillStyle = "rgba(255, 238, 232, 0.78)";
+  ctx.beginPath();
+  ctx.ellipse(5 * scale, 2 * scale, 6 * scale, 4 * scale, -0.15, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 
   ctx.strokeStyle = "rgba(124, 70, 58, 0.26)";
@@ -449,11 +468,19 @@ function drawHandAt(x, y, radius, rotation, alpha) {
   ctx.restore();
 }
 
-function drawFinger(x, y, width, height, rotation, scale) {
+function drawFinger(x, y, width, height, rotation, scale, curl = 0.75) {
   ctx.save();
   ctx.translate(x * scale, y * scale);
   ctx.rotate(rotation);
+  const fingerGradient = ctx.createLinearGradient(0, 0, width * scale, height * scale);
+  fingerGradient.addColorStop(0, "#ffd6ca");
+  fingerGradient.addColorStop(0.58, "#f5b8a7");
+  fingerGradient.addColorStop(1, "#d98874");
+  ctx.fillStyle = fingerGradient;
   roundedRect(0, 0, width * scale, height * scale, (width / 2) * scale);
+  ctx.fill();
+  ctx.fillStyle = "rgba(126, 69, 55, 0.12)";
+  roundedRect((width * 0.18) * scale, (height * curl) * scale, (width * 0.74) * scale, (height * 0.22) * scale, (width * 0.34) * scale);
   ctx.fill();
   ctx.strokeStyle = "rgba(124, 70, 58, 0.18)";
   ctx.lineWidth = 1.2 * scale;
@@ -462,10 +489,12 @@ function drawFinger(x, y, width, height, rotation, scale) {
   ctx.lineTo((width - 3) * scale, height * 0.56 * scale);
   ctx.moveTo(4 * scale, height * 0.28 * scale);
   ctx.lineTo((width - 4) * scale, height * 0.28 * scale);
+  ctx.moveTo(5 * scale, height * 0.76 * scale);
+  ctx.quadraticCurveTo((width / 2) * scale, height * 0.82 * scale, (width - 5) * scale, height * 0.76 * scale);
   ctx.stroke();
   ctx.fillStyle = "rgba(255, 238, 232, 0.72)";
   ctx.beginPath();
-  ctx.ellipse((width / 2) * scale, 9 * scale, (width * 0.28) * scale, 5 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse((width / 2) * scale, 8 * scale, (width * 0.32) * scale, 5 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -565,6 +594,10 @@ function currentTargetVariant() {
   return targetVariants[(state.sessionSeed + state.round - 1) % targetVariants.length];
 }
 
+function currentRoundTwist() {
+  return roundTwists[(state.sessionSeed + state.round - 1) % roundTwists.length];
+}
+
 function colorWithAlpha(hex, alpha) {
   const clean = hex.replace("#", "");
   const value = Number.parseInt(clean, 16);
@@ -655,11 +688,14 @@ function finishThrow() {
   const baseScore = state.ball.item === "safe" && rawScore === 0 ? 10 : rawScore;
   const bonusScore = state.ball.item === "firework" && baseScore > 0 ? baseScore + 30 : baseScore;
   const itemScore = state.ball.item === "double" ? bonusScore * 2 : bonusScore;
-  const score = state.ball.rainbow ? Math.round(itemScore * 1.5) : itemScore;
+  let score = state.ball.rainbow ? Math.round(itemScore * 1.5) : itemScore;
   const player = state.players[state.currentPlayer];
+  const rewards = awardThrowRewards(player, baseScore, score);
+  const twistRewards = applyRoundTwist(player, baseScore, score);
+  if (twistRewards.extraScore) score += twistRewards.extraScore;
+  rewards.push(...twistRewards.rewards);
   player.score += score;
   player.throws.push(score);
-  const rewards = awardThrowRewards(player, baseScore, score);
   consumeSelectedItem(player, state.ball.item);
   state.lastHit = { ...impact, score, radius: state.ball.radius, time: performance.now() };
   playHit(score);
@@ -723,6 +759,33 @@ function awardThrowRewards(player, baseScore, finalScore) {
   }
 
   return rewards;
+}
+
+function applyRoundTwist(player, baseScore, score) {
+  const twist = currentRoundTwist();
+  const opponent = state.players[state.currentPlayer === 0 ? 1 : 0];
+  const rewards = [];
+  let extraScore = 0;
+
+  if (twist.id === "comeback" && player.score < opponent.score && score > 0) {
+    extraScore += 20;
+    rewards.push("역전 찬스 +20");
+  }
+  if (twist.id === "perfect" && baseScore >= 100) {
+    player.stars += 2;
+    player.tickets += 1;
+    rewards.push("중앙 축제 별+2 티켓+1");
+  }
+  if (twist.id === "combo" && player.combo >= 2) {
+    extraScore += 10;
+    rewards.push("콤보 파티 +10");
+  }
+  if (twist.id === "ticket" && baseScore >= 50) {
+    player.tickets += 1;
+    rewards.push("티켓 데이 +1");
+  }
+
+  return { extraScore, rewards };
 }
 
 function consumeSelectedItem(player, item) {
@@ -792,7 +855,8 @@ function startNextRound() {
   resetBall();
   updateUi();
   syncRoom(true);
-  setMessage(`${state.round}라운드 ${currentTargetVariant().name} 과녁! ${state.players[state.currentPlayer].name} 먼저 던집니다.`);
+  const twist = currentRoundTwist();
+  setMessage(`${state.round}라운드 ${currentTargetVariant().name} 과녁, ${twist.name}! ${twist.desc}`);
   maybeStartComputerTurn();
 }
 
@@ -928,7 +992,7 @@ function updateUi() {
   ui.playerTwoRounds.textContent = state.players[1].roundWins;
   ui.starCount.textContent = state.players[0].stars + state.players[1].stars;
   ui.ticketCount.textContent = state.players[0].tickets + state.players[1].tickets;
-  ui.missionLabel.textContent = state.currentMission.text;
+  ui.missionLabel.textContent = `${state.currentMission.text} · ${currentRoundTwist().name}`;
   updateItemButtons();
   updateOnlineUi();
   renderLobby();
@@ -1019,6 +1083,10 @@ function renderLobby() {
   if (tab === "missions") {
     ui.lobbyContent.innerHTML = `
       <h2>미션</h2>
+      <div class="mission-card active">
+        <strong>라운드 이벤트</strong>
+        <span>${escapeHtml(currentRoundTwist().name)}: ${escapeHtml(currentRoundTwist().desc)}</span>
+      </div>
       ${missions.map((mission, index) => `
         <div class="mission-card ${index === state.missionIndex ? "active" : ""}">
           <strong>${index === state.missionIndex ? "진행 중" : `미션 ${index + 1}`}</strong>
@@ -1054,6 +1122,7 @@ function renderLobby() {
       <p><strong>자석 공:</strong> 실제 도착점이 중심 쪽으로 조금 보정됩니다.</p>
       <p><strong>왕공:</strong> 공이 실제로 커지고 판정 범위도 넓어집니다.</p>
       <p><strong>상점:</strong> 라운드 승리로 받은 티켓을 아이템으로 바꿉니다.</p>
+      <p><strong>라운드 이벤트:</strong> 매 라운드 역전 찬스, 중앙 축제, 콤보 파티, 티켓 데이가 돌아가며 열립니다.</p>
     </div>
   `;
 }
@@ -1154,7 +1223,8 @@ function resetGame() {
   updateUi();
   syncRoom(true);
   ui.roomStatus.textContent = state.vsComputer ? "컴퓨터 대전" : `온라인 방 ${state.online.roomCode}`;
-  setMessage(`${currentTargetVariant().name} 과녁! 3판 2승 시작. 공을 뒤로 당겼다가 과녁을 향해 놓아보세요.`);
+  const twist = currentRoundTwist();
+  setMessage(`${currentTargetVariant().name} 과녁, ${twist.name}! ${twist.desc}`);
   maybeStartComputerTurn();
 }
 
