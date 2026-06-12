@@ -1319,7 +1319,7 @@ async function signInWithGoogle() {
     state.online.authError = "";
     setMessage("Google 로그인 창을 확인해 주세요.");
     const authModule = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js");
-    const result = await authModule.signInWithPopup(state.online.auth, state.online.provider);
+    const result = await withPopupTimeout(authModule.signInWithPopup(state.online.auth, state.online.provider));
     await completeGoogleLogin(result.user);
   } catch (error) {
     if (shouldUseRedirectLogin(error)) {
@@ -1360,7 +1360,21 @@ async function completeGoogleLogin(user) {
 
 function shouldUseRedirectLogin(error) {
   const code = error?.code || "";
-  return code.includes("auth/popup-blocked") || code.includes("auth/popup-closed-by-user") || code.includes("auth/cancelled-popup-request");
+  return code.includes("auth/popup-blocked")
+    || code.includes("auth/popup-closed-by-user")
+    || code.includes("auth/cancelled-popup-request")
+    || code.includes("auth/popup-timeout");
+}
+
+function withPopupTimeout(promise) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject({ code: "auth/popup-timeout", message: "Popup login did not finish in time." });
+      }, 7000);
+    })
+  ]);
 }
 
 function firebaseErrorMessage(error, fallback) {
