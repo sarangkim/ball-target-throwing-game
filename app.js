@@ -1283,14 +1283,16 @@ async function initFirebase() {
     state.online.provider = new authModule.GoogleAuthProvider();
     state.online.enabled = true;
     state.online.initializing = false;
+    const redirectResult = await authModule.getRedirectResult(state.online.auth).catch((error) => {
+      state.online.authError = firebaseErrorMessage(error, "Google 로그인 리다이렉트 처리에 실패했습니다.");
+      return null;
+    });
+    if (redirectResult?.user) {
+      await completeGoogleLogin(redirectResult.user);
+    }
     authModule.onAuthStateChanged(state.online.auth, async (user) => {
       if (!user) return;
-      state.online.user = user;
-      state.players[0].name = user.displayName || "Google 플레이어";
-      ui.googleButton.textContent = state.players[0].name;
-      ui.lobbyGoogleButton.textContent = state.players[0].name;
-      await registerLobbyPresence();
-      updateUi();
+      await completeGoogleLogin(user);
     });
     updateOnlineUi();
   } catch (error) {
@@ -1318,16 +1320,15 @@ async function signInWithGoogle() {
     setMessage("Google 로그인 창을 확인해 주세요.");
     const authModule = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js");
     const result = await authModule.signInWithPopup(state.online.auth, state.online.provider);
-    state.online.user = result.user;
-    state.online.authError = "";
-    state.players[0].name = result.user.displayName || "Google 플레이어";
-    ui.googleButton.textContent = state.players[0].name;
-    ui.lobbyGoogleButton.textContent = state.players[0].name;
-    await registerLobbyPresence();
-    updateOnlineUi();
-    setMessage("Google 로그인 완료. 로비에서 접속한 상대에게 도전할 수 있어요.");
-    updateUi();
+    await completeGoogleLogin(result.user);
   } catch (error) {
+    if (shouldUseRedirectLogin(error)) {
+      const authModule = await import("https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js");
+      state.online.authError = "팝업 로그인이 닫혀서 전체 화면 로그인으로 전환합니다.";
+      updateOnlineUi();
+      await authModule.signInWithRedirect(state.online.auth, state.online.provider);
+      return;
+    }
     const message = firebaseErrorMessage(error, "Google 로그인에 실패했습니다.");
     state.online.authError = message;
     setMessage(message);
@@ -1338,6 +1339,28 @@ async function signInWithGoogle() {
     ui.googleButton.disabled = false;
     updateOnlineUi();
   }
+}
+
+async function completeGoogleLogin(user) {
+  state.online.user = user;
+  state.online.authError = "";
+  state.players[0].name = user.displayName || "Google 플레이어";
+  ui.googleButton.textContent = state.players[0].name;
+  ui.lobbyGoogleButton.textContent = state.players[0].name;
+  try {
+    await registerLobbyPresence();
+  } catch (error) {
+    state.online.authError = firebaseErrorMessage(error, "로그인은 됐지만 온라인 로비 연결에 실패했습니다.");
+    console.warn("온라인 로비 연결 실패", error);
+  }
+  updateOnlineUi();
+  setMessage("Google 로그인 완료. 로비에서 접속한 상대에게 도전할 수 있어요.");
+  updateUi();
+}
+
+function shouldUseRedirectLogin(error) {
+  const code = error?.code || "";
+  return code.includes("auth/popup-blocked") || code.includes("auth/popup-closed-by-user") || code.includes("auth/cancelled-popup-request");
 }
 
 function firebaseErrorMessage(error, fallback) {
